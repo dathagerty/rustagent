@@ -41,3 +41,52 @@ async fn test_tool_execute() {
     let result = tool.execute(serde_json::json!({})).await.unwrap();
     assert_eq!(result, "success");
 }
+
+use rustagent::tools::file::{ReadFileTool, WriteFileTool, ListFilesTool};
+use serde_json::json;
+use tempfile::TempDir;
+use std::fs;
+
+#[tokio::test]
+async fn test_read_file_tool() {
+    let temp = TempDir::new().unwrap();
+    let file_path = temp.path().join("test.txt");
+    fs::write(&file_path, "hello world").unwrap();
+
+    let tool = ReadFileTool;
+    let result = tool.execute(json!({
+        "path": file_path.to_str().unwrap()
+    })).await.unwrap();
+
+    assert!(result.contains("hello world"));
+}
+
+#[tokio::test]
+async fn test_write_file_tool() {
+    let temp = TempDir::new().unwrap();
+    let file_path = temp.path().join("output.txt");
+
+    let tool = WriteFileTool;
+    tool.execute(json!({
+        "path": file_path.to_str().unwrap(),
+        "content": "test content"
+    })).await.unwrap();
+
+    let content = fs::read_to_string(&file_path).unwrap();
+    assert_eq!(content, "test content");
+}
+
+#[tokio::test]
+async fn test_list_files_tool() {
+    let temp = TempDir::new().unwrap();
+    fs::write(temp.path().join("file1.txt"), "a").unwrap();
+    fs::write(temp.path().join("file2.txt"), "b").unwrap();
+
+    let tool = ListFilesTool;
+    let result = tool.execute(json!({
+        "path": temp.path().to_str().unwrap()
+    })).await.unwrap();
+
+    assert!(result.contains("file1.txt"));
+    assert!(result.contains("file2.txt"));
+}
