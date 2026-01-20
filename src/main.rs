@@ -1,9 +1,11 @@
 pub mod config;
 pub mod llm;
+pub mod planning;
 pub mod spec;
 pub mod tools;
 
 use clap::{Parser, Subcommand};
+use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(name = "rustagent")]
@@ -37,6 +39,33 @@ enum Commands {
     },
 }
 
+/// Find config file in standard locations
+fn find_config_path() -> anyhow::Result<PathBuf> {
+    // Try current directory
+    let local_config = PathBuf::from("rustagent.toml");
+    if local_config.exists() {
+        return Ok(local_config);
+    }
+
+    // Try XDG config directory
+    if let Some(config_dir) = dirs::config_dir() {
+        let xdg_config = config_dir.join("rustagent").join("config.toml");
+        if xdg_config.exists() {
+            return Ok(xdg_config);
+        }
+    }
+
+    // Try home directory
+    if let Some(home_dir) = dirs::home_dir() {
+        let home_config = home_dir.join(".rustagent").join("config.toml");
+        if home_config.exists() {
+            return Ok(home_config);
+        }
+    }
+
+    anyhow::bail!("Config file not found. Please create rustagent.toml in current directory or ~/.rustagent/config.toml")
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     env_logger::init();
@@ -50,9 +79,18 @@ async fn main() -> anyhow::Result<()> {
             // TODO: Implement initialization logic
         }
         Commands::Plan { spec_dir } => {
-            let dir = spec_dir.clone().unwrap_or_else(|| ".".to_string());
-            println!("Creating plan from spec directory: {}", dir);
-            // TODO: Implement plan creation logic
+            // Load config from standard locations
+            let config_path = find_config_path()?;
+            let config = config::Config::load(&config_path)?;
+
+            // Use provided spec_dir or default from config
+            let dir = spec_dir
+                .clone()
+                .unwrap_or_else(|| config.rustagent.spec_dir.clone());
+
+            // Create and run planning agent
+            let mut agent = planning::PlanningAgent::new(config, dir);
+            agent.run().await?;
         }
         Commands::Run { spec_file, max_iterations } => {
             println!("Running agent with spec: {}", spec_file);
