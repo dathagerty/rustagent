@@ -1,6 +1,7 @@
 pub mod config;
 pub mod llm;
 pub mod planning;
+pub mod ralph;
 pub mod spec;
 pub mod tools;
 
@@ -93,11 +94,13 @@ async fn main() -> anyhow::Result<()> {
             agent.run().await?;
         }
         Commands::Run { spec_file, max_iterations } => {
-            println!("Running agent with spec: {}", spec_file);
-            if let Some(max_iter) = max_iterations {
-                println!("Maximum iterations: {}", max_iter);
-            }
-            // TODO: Implement execution logic
+            // Load config from standard locations
+            let config_path = find_config_path()?;
+            let config = config::Config::load(&config_path)?;
+
+            // Create and run Ralph loop
+            let ralph = ralph::RalphLoop::new(config, spec_file.clone(), *max_iterations);
+            ralph.run().await?;
         }
     }
 
