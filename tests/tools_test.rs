@@ -43,6 +43,7 @@ async fn test_tool_execute() {
 }
 
 use rustagent::tools::file::{ReadFileTool, WriteFileTool, ListFilesTool};
+use rustagent::tools::shell::RunCommandTool;
 use serde_json::json;
 use tempfile::TempDir;
 use std::fs;
@@ -89,4 +90,27 @@ async fn test_list_files_tool() {
 
     assert!(result.contains("file1.txt"));
     assert!(result.contains("file2.txt"));
+}
+
+#[tokio::test]
+async fn test_run_command_tool() {
+    let tool = RunCommandTool;
+    let result = tool.execute(json!({
+        "command": "echo hello"
+    })).await.unwrap();
+
+    assert!(result.contains("hello"));
+}
+
+#[tokio::test]
+async fn test_run_command_with_working_dir() {
+    let temp = TempDir::new().unwrap();
+
+    let tool = RunCommandTool;
+    let result = tool.execute(json!({
+        "command": "pwd",
+        "working_dir": temp.path().to_str().unwrap()
+    })).await.unwrap();
+
+    assert!(result.contains(temp.path().to_str().unwrap()));
 }

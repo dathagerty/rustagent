@@ -69,3 +69,4 @@ impl Default for ToolRegistry {
 }
 
 pub mod file;
+pub mod shell;
