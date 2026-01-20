@@ -62,6 +62,8 @@ pub trait LlmClient {
     async fn chat(
         &self,
         messages: Vec<Message>,
-        tools: Option<Vec<ToolDefinition>>,
+        tools: &[ToolDefinition],
     ) -> Result<Response, Box<dyn std::error::Error>>;
 }
+
+pub mod anthropic;

@@ -1,0 +1,170 @@
+use super::{LlmClient, Message, Response, ResponseContent, Role, ToolCall, ToolDefinition};
+use async_trait::async_trait;
+use reqwest::Client;
+use serde::{Deserialize, Serialize};
+
+const ANTHROPIC_API_URL: &str = "https://api.anthropic.com/v1/messages";
+const ANTHROPIC_VERSION: &str = "2023-06-01";
+
+pub struct AnthropicClient {
+    api_key: String,
+    client: Client,
+}
+
+#[derive(Debug, Serialize)]
+struct AnthropicRequest {
+    model: String,
+    max_tokens: u32,
+    messages: Vec<AnthropicMessage>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tools: Option<Vec<AnthropicTool>>,
+}
+
+#[derive(Debug, Serialize)]
+struct AnthropicMessage {
+    role: String,
+    content: String,
+}
+
+#[derive(Debug, Serialize)]
+struct AnthropicTool {
+    name: String,
+    description: String,
+    input_schema: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize)]
+struct AnthropicResponse {
+    content: Vec<ContentBlock>,
+    stop_reason: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type")]
+enum ContentBlock {
+    #[serde(rename = "text")]
+    Text { text: String },
+    #[serde(rename = "tool_use")]
+    ToolUse {
+        id: String,
+        name: String,
+        input: serde_json::Value,
+    },
+}
+
+impl AnthropicClient {
+    pub fn new(api_key: String) -> Self {
+        Self {
+            api_key,
+            client: Client::new(),
+        }
+    }
+
+    pub fn format_request(
+        &self,
+        messages: &[Message],
+        tools: &[ToolDefinition],
+    ) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+        let anthropic_messages: Vec<AnthropicMessage> = messages
+            .iter()
+            .filter(|m| m.role != Role::System)
+            .map(|m| AnthropicMessage {
+                role: match m.role {
+                    Role::User => "user".to_string(),
+                    Role::Assistant => "assistant".to_string(),
+                    Role::System => "user".to_string(),
+                },
+                content: m.content.clone(),
+            })
+            .collect();
+
+        let anthropic_tools: Option<Vec<AnthropicTool>> = if tools.is_empty() {
+            None
+        } else {
+            Some(
+                tools
+                    .iter()
+                    .map(|t| AnthropicTool {
+                        name: t.name.clone(),
+                        description: t.description.clone(),
+                        input_schema: t.parameters.clone(),
+                    })
+                    .collect(),
+            )
+        };
+
+        let request = AnthropicRequest {
+            model: "claude-sonnet-4-20250514".to_string(),
+            max_tokens: 8192,
+            messages: anthropic_messages,
+            tools: anthropic_tools,
+        };
+
+        Ok(serde_json::to_value(request)?)
+    }
+}
+
+#[async_trait]
+impl LlmClient for AnthropicClient {
+    async fn chat(&self, messages: Vec<Message>, tools: &[ToolDefinition]) -> Result<Response, Box<dyn std::error::Error>> {
+        let request_body = self.format_request(&messages, tools)?;
+
+        let response = self
+            .client
+            .post(ANTHROPIC_API_URL)
+            .header("x-api-key", &self.api_key)
+            .header("anthropic-version", ANTHROPIC_VERSION)
+            .header("content-type", "application/json")
+            .json(&request_body)
+            .send()
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(format!("Anthropic API error {}: {}", status, body).into());
+        }
+
+        let anthropic_response: AnthropicResponse = response
+            .json()
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+
+        let content = if anthropic_response
+            .content
+            .iter()
+            .any(|b| matches!(b, ContentBlock::ToolUse { .. }))
+        {
+            let tool_calls: Vec<ToolCall> = anthropic_response
+                .content
+                .iter()
+                .filter_map(|block| match block {
+                    ContentBlock::ToolUse { id, name, input } => Some(ToolCall {
+                        id: id.clone(),
+                        name: name.clone(),
+                        parameters: input.clone(),
+                    }),
+                    _ => None,
+                })
+                .collect();
+            ResponseContent::ToolCalls(tool_calls)
+        } else {
+            let text = anthropic_response
+                .content
+                .iter()
+                .filter_map(|block| match block {
+                    ContentBlock::Text { text } => Some(text.as_str()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            ResponseContent::Text(text)
+        };
+
+        Ok(Response {
+            content,
+            stop_reason: anthropic_response.stop_reason,
+        })
+    }
+}
