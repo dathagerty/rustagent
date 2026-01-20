@@ -1,0 +1,77 @@
+# Rustagent Configuration Example
+# Copy this file to rustagent.toml or ~/.rustagent/config.toml and configure for your setup
+
+# ============================================================================
+# LLM Configuration
+# ============================================================================
+# Choose your LLM provider and model
+[llm]
+provider = "anthropic"  # Options: "anthropic", "openai", "ollama"
+model = "claude-3-5-sonnet-20241022"
+
+# ============================================================================
+# Provider-Specific Configurations
+# ============================================================================
+# Configure the provider you selected above. You only need the section for
+# your chosen provider. Use environment variable substitution with ${VAR_NAME}
+# to keep API keys out of your config file.
+
+# Anthropic Configuration (for Claude models)
+[anthropic]
+api_key = "${ANTHROPIC_API_KEY}"  # Set ANTHROPIC_API_KEY environment variable
+
+# OpenAI Configuration (for GPT models)
+# [openai]
+# api_key = "${OPENAI_API_KEY}"  # Set OPENAI_API_KEY environment variable
+
+# Ollama Configuration (for local models)
+# [ollama]
+# base_url = "http://localhost:11434"  # Default Ollama server URL
+
+# ============================================================================
+# Rustagent Configuration
+# ============================================================================
+[rustagent]
+# Directory where specification files are stored
+spec_dir = "specs"
+
+# Maximum number of iterations for the Ralph Loop (optional)
+# If not set, will run until all tasks are complete or blocked
+# max_iterations = 10
+
+# ============================================================================
+# Configuration Examples for Different Setups
+# ============================================================================
+
+# Example 1: Anthropic with Claude
+# [llm]
+# provider = "anthropic"
+# model = "claude-3-5-sonnet-20241022"
+#
+# [anthropic]
+# api_key = "${ANTHROPIC_API_KEY}"
+#
+# [rustagent]
+# spec_dir = "specs"
+
+# Example 2: OpenAI with GPT-4
+# [llm]
+# provider = "openai"
+# model = "gpt-4"
+#
+# [openai]
+# api_key = "${OPENAI_API_KEY}"
+#
+# [rustagent]
+# spec_dir = "specs"
+
+# Example 3: Local Ollama with Llama
+# [llm]
+# provider = "ollama"
+# model = "llama2"
+#
+# [ollama]
+# base_url = "http://localhost:11434"
+#
+# [rustagent]
+# spec_dir = "specs"
