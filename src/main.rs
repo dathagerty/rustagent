@@ -1,4 +1,4 @@
-use rustagent::{config, planning, ralph, spec};
+use rustagent::{config, logging, planning, ralph};
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
@@ -66,7 +66,7 @@ fn find_config_path() -> anyhow::Result<PathBuf> {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    env_logger::init();
+    let _log_guard = logging::init_logging()?;
 
     let cli = Cli::parse();
 

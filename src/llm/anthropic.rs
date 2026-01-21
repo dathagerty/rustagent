@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tokio::time::{Duration, sleep};
+use tracing::{info, instrument, warn};
 
 const ANTHROPIC_API_URL: &str = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION: &str = "2023-06-01";
@@ -124,11 +125,13 @@ impl AnthropicClient {
 
 #[async_trait]
 impl LlmClient for AnthropicClient {
+    #[instrument(skip(self, messages, tools), fields(model = %self.model))]
     async fn chat(
         &self,
         messages: Vec<Message>,
         tools: &[ToolDefinition],
     ) -> anyhow::Result<Response> {
+        info!(message_count = messages.len(), tool_count = tools.len(), "Starting Anthropic API call");
         let request_body = self.format_request(&messages, tools)?;
 
         let mut retries = 0;
@@ -136,22 +139,28 @@ impl LlmClient for AnthropicClient {
 
         loop {
             let error_msg = match self.send_request(&request_body).await {
-                Ok(response) => return Ok(response),
+                Ok(response) => {
+                    info!("Anthropic API call successful");
+                    return Ok(response);
+                }
                 Err(e) => {
                     let msg = e.to_string();
                     if retries >= max_retries || !is_retryable_error(&msg) {
+                        warn!(error = %msg, "Anthropic API call failed permanently");
                         return Err(e);
                     }
                     msg
-                } // e is dropped here
+                }
             };
 
-            // Now we're outside the match, e has been dropped
             retries += 1;
             let delay = Duration::from_secs(2u64.pow(retries));
-            eprintln!(
-                "API call failed, retrying in {:?} (attempt {}/{}): {}",
-                delay, retries, max_retries, error_msg
+            warn!(
+                attempt = retries,
+                max_retries = max_retries,
+                delay_secs = delay.as_secs(),
+                error = %error_msg,
+                "Anthropic API call failed, retrying"
             );
             sleep(delay).await;
         }
