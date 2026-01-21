@@ -170,9 +170,7 @@ impl OllamaClient {
 
 fn parse_arguments(args: &serde_json::Value) -> serde_json::Value {
     match args {
-        serde_json::Value::String(s) => {
-            serde_json::from_str(s).unwrap_or(serde_json::Value::Null)
-        }
+        serde_json::Value::String(s) => serde_json::from_str(s).unwrap_or(serde_json::Value::Null),
         other => other.clone(),
     }
 }
@@ -185,7 +183,11 @@ impl LlmClient for OllamaClient {
         messages: Vec<Message>,
         tools: &[ToolDefinition],
     ) -> anyhow::Result<Response> {
-        info!(message_count = messages.len(), tool_count = tools.len(), "Starting Ollama API call");
+        info!(
+            message_count = messages.len(),
+            tool_count = tools.len(),
+            "Starting Ollama API call"
+        );
         let request_body = self.format_request(&messages, tools)?;
 
         let mut retries = 0;

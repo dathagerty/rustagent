@@ -70,11 +70,15 @@ impl Tool for SignalTool {
 
         match params.signal {
             CompletionSignal::Complete => {
-                let msg = params.message.unwrap_or_else(|| "Task completed".to_string());
+                let msg = params
+                    .message
+                    .unwrap_or_else(|| "Task completed".to_string());
                 Ok(format!("SIGNAL:complete:{}", msg))
             }
             CompletionSignal::Blocked => {
-                let reason = params.reason.unwrap_or_else(|| "Unknown reason".to_string());
+                let reason = params
+                    .reason
+                    .unwrap_or_else(|| "Unknown reason".to_string());
                 Ok(format!("SIGNAL:blocked:{}", reason))
             }
         }

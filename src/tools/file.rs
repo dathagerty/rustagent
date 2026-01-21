@@ -7,8 +7,8 @@ use std::path::Path;
 use std::sync::Arc;
 use tokio::fs;
 
-use super::permission_check::FilePermissionChecker;
 use super::Tool;
+use super::permission_check::FilePermissionChecker;
 
 /// Tool for reading file contents
 pub struct ReadFileTool {

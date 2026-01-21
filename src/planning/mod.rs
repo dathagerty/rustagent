@@ -99,10 +99,7 @@ impl PlanningAgent {
             let tools = self.registry.definitions();
 
             // Call LLM
-            let response = self
-                .client
-                .chat(self.conversation.clone(), &tools)
-                .await?;
+            let response = self.client.chat(self.conversation.clone(), &tools).await?;
 
             match response.content {
                 ResponseContent::Text(text) => {

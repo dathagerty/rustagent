@@ -131,7 +131,11 @@ impl LlmClient for AnthropicClient {
         messages: Vec<Message>,
         tools: &[ToolDefinition],
     ) -> anyhow::Result<Response> {
-        info!(message_count = messages.len(), tool_count = tools.len(), "Starting Anthropic API call");
+        info!(
+            message_count = messages.len(),
+            tool_count = tools.len(),
+            "Starting Anthropic API call"
+        );
         let request_body = self.format_request(&messages, tools)?;
 
         let mut retries = 0;
@@ -168,10 +172,7 @@ impl LlmClient for AnthropicClient {
 }
 
 impl AnthropicClient {
-    async fn send_request(
-        &self,
-        request_body: &serde_json::Value,
-    ) -> anyhow::Result<Response> {
+    async fn send_request(&self, request_body: &serde_json::Value) -> anyhow::Result<Response> {
         let response = self
             .client
             .post(ANTHROPIC_API_URL)

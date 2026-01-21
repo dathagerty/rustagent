@@ -283,6 +283,30 @@ Rustagent provides the following tools to agents:
   }
   ```
 
+### Task Completion
+
+- **signal_completion**: Signal task completion or blocked status
+  ```json
+  {
+    "name": "signal_completion",
+    "arguments": {
+      "signal": "complete",
+      "message": "Task finished successfully"
+    }
+  }
+  ```
+  
+  Or to signal blocked:
+  ```json
+  {
+    "name": "signal_completion",
+    "arguments": {
+      "signal": "blocked",
+      "reason": "Missing required dependency"
+    }
+  }
+  ```
+
 ## Development
 
 ### Building
@@ -319,6 +343,20 @@ RUST_LOG=debug cargo test
 
 # Run specific test
 cargo test test_name
+```
+
+### Logging
+
+Rustagent uses `tracing` for file-based logging. Logs are stored in:
+
+- `$XDG_STATE_HOME/rustagent/logs/` (if XDG_STATE_HOME is set)
+- `~/.local/share/rustagent/logs/` (macOS/Linux)
+- `~/.local/state/rustagent/logs/` (fallback)
+
+Logs are rotated daily. To adjust the log level, set the `RUST_LOG` environment variable:
+
+```bash
+RUST_LOG=rustagent=debug cargo run -- plan
 ```
 
 ### Documentation

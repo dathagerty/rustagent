@@ -77,3 +77,115 @@ fn test_find_next_pending_task() {
     assert!(next.is_some());
     assert_eq!(next.unwrap().id, "task-2");
 }
+
+#[test]
+fn test_find_next_task_skips_blocked() {
+    let spec = Spec {
+        name: "test".to_string(),
+        description: "Test".to_string(),
+        branch_name: "feature/test".to_string(),
+        created_at: Utc::now(),
+        tasks: vec![
+            Task {
+                id: "task-1".to_string(),
+                title: "Task 1".to_string(),
+                description: "First task".to_string(),
+                acceptance_criteria: vec![],
+                status: TaskStatus::Blocked,
+                blocked_reason: Some("Missing dep".to_string()),
+                completed_at: None,
+            },
+            Task {
+                id: "task-2".to_string(),
+                title: "Task 2".to_string(),
+                description: "Second task".to_string(),
+                acceptance_criteria: vec![],
+                status: TaskStatus::Pending,
+                blocked_reason: None,
+                completed_at: None,
+            },
+        ],
+        learnings: vec![],
+    };
+
+    let next = spec.find_next_task();
+    assert!(next.is_some());
+    assert_eq!(next.unwrap().id, "task-2");
+}
+
+#[test]
+fn test_find_next_task_skips_in_progress() {
+    let spec = Spec {
+        name: "test".to_string(),
+        description: "Test".to_string(),
+        branch_name: "feature/test".to_string(),
+        created_at: Utc::now(),
+        tasks: vec![
+            Task {
+                id: "task-1".to_string(),
+                title: "Task 1".to_string(),
+                description: "First task".to_string(),
+                acceptance_criteria: vec![],
+                status: TaskStatus::InProgress,
+                blocked_reason: None,
+                completed_at: None,
+            },
+            Task {
+                id: "task-2".to_string(),
+                title: "Task 2".to_string(),
+                description: "Second task".to_string(),
+                acceptance_criteria: vec![],
+                status: TaskStatus::Pending,
+                blocked_reason: None,
+                completed_at: None,
+            },
+        ],
+        learnings: vec![],
+    };
+
+    let next = spec.find_next_task();
+    assert!(next.is_some());
+    assert_eq!(next.unwrap().id, "task-2");
+}
+
+#[test]
+fn test_find_next_task_returns_none_when_all_complete() {
+    let spec = Spec {
+        name: "test".to_string(),
+        description: "Test".to_string(),
+        branch_name: "feature/test".to_string(),
+        created_at: Utc::now(),
+        tasks: vec![Task {
+            id: "task-1".to_string(),
+            title: "Task 1".to_string(),
+            description: "First task".to_string(),
+            acceptance_criteria: vec![],
+            status: TaskStatus::Complete,
+            blocked_reason: None,
+            completed_at: Some(Utc::now()),
+        }],
+        learnings: vec![],
+    };
+
+    let next = spec.find_next_task();
+    assert!(next.is_none());
+}
+
+#[test]
+fn test_add_learning() {
+    let mut spec = Spec {
+        name: "test".to_string(),
+        description: "Test".to_string(),
+        branch_name: "feature/test".to_string(),
+        created_at: Utc::now(),
+        tasks: vec![],
+        learnings: vec![],
+    };
+
+    spec.add_learning("First learning".to_string());
+    spec.add_learning("Second learning".to_string());
+
+    assert_eq!(spec.learnings.len(), 2);
+    assert_eq!(spec.learnings[0], "First learning");
+    assert_eq!(spec.learnings[1], "Second learning");
+}

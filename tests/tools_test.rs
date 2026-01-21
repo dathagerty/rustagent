@@ -217,7 +217,6 @@ fn test_registry_register_while_reading() {
 
 use rustagent::config::{SecurityConfig, ShellPolicy};
 use rustagent::security::{SecurityValidator, permission::AutoApproveHandler};
-use std::collections::HashSet;
 
 #[tokio::test]
 async fn test_run_command_with_allowlist() {

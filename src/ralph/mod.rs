@@ -269,7 +269,9 @@ impl RalphLoop {
         context.push_str("3. Use write_file to create/modify files\n");
         context.push_str("4. Use run_command to run tests, builds, git commands\n");
         context.push_str("5. When complete, call signal_completion with signal='complete'\n");
-        context.push_str("6. If blocked, call signal_completion with signal='blocked' and explain why\n");
+        context.push_str(
+            "6. If blocked, call signal_completion with signal='blocked' and explain why\n",
+        );
         context.push('\n');
         context.push_str("Begin executing the task now.\n");
 

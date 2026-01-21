@@ -41,10 +41,7 @@ fn test_ollama_format_request_with_tools() {
 fn test_ollama_format_request_with_system() {
     let client = OllamaClient::new("http://localhost:11434".to_string(), "llama3".to_string());
 
-    let messages = vec![
-        Message::system("You are helpful"),
-        Message::user("Hello"),
-    ];
+    let messages = vec![Message::system("You are helpful"), Message::user("Hello")];
 
     let request = client.format_request(&messages, &[]).unwrap();
 

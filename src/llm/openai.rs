@@ -184,7 +184,11 @@ impl LlmClient for OpenAiClient {
         messages: Vec<Message>,
         tools: &[ToolDefinition],
     ) -> anyhow::Result<Response> {
-        info!(message_count = messages.len(), tool_count = tools.len(), "Starting OpenAI API call");
+        info!(
+            message_count = messages.len(),
+            tool_count = tools.len(),
+            "Starting OpenAI API call"
+        );
         let request_body = self.format_request(&messages, tools)?;
 
         let mut retries = 0;

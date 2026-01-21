@@ -1,5 +1,5 @@
-use rustagent::tools::signal::SignalTool;
 use rustagent::tools::Tool;
+use rustagent::tools::signal::SignalTool;
 
 #[tokio::test]
 async fn test_signal_complete() {

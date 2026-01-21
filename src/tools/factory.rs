@@ -1,9 +1,9 @@
-use crate::security::permission::PermissionHandler;
 use crate::security::SecurityValidator;
+use crate::security::permission::PermissionHandler;
+use crate::tools::ToolRegistry;
 use crate::tools::file::{ListFilesTool, ReadFileTool, WriteFileTool};
 use crate::tools::shell::RunCommandTool;
 use crate::tools::signal::SignalTool;
-use crate::tools::ToolRegistry;
 use std::sync::Arc;
 
 pub fn create_default_registry(

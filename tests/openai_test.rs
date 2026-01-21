@@ -18,10 +18,7 @@ fn test_openai_format_request_basic() {
 fn test_openai_format_request_with_system() {
     let client = OpenAiClient::new("test-key".to_string(), "gpt-4".to_string(), 4096);
 
-    let messages = vec![
-        Message::system("You are helpful"),
-        Message::user("Hello"),
-    ];
+    let messages = vec![Message::system("You are helpful"), Message::user("Hello")];
 
     let request = client.format_request(&messages, &[]).unwrap();
 
