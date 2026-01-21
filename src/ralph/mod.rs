@@ -4,8 +4,7 @@ use crate::llm::{LlmClient, Message, ResponseContent};
 use crate::security::{SecurityValidator, permission::CliPermissionHandler};
 use crate::spec::{Spec, TaskStatus};
 use crate::tools::ToolRegistry;
-use crate::tools::file::{ListFilesTool, ReadFileTool, WriteFileTool};
-use crate::tools::shell::RunCommandTool;
+use crate::tools::factory::create_default_registry;
 use anyhow::{Context, Result};
 use chrono::Utc;
 use std::sync::Arc;
@@ -32,23 +31,7 @@ impl RalphLoop {
         let permission_handler = Arc::new(CliPermissionHandler);
 
         // Register tools
-        let tools = ToolRegistry::new();
-        tools.register(Arc::new(ReadFileTool::new(
-            validator.clone(),
-            permission_handler.clone(),
-        )));
-        tools.register(Arc::new(WriteFileTool::new(
-            validator.clone(),
-            permission_handler.clone(),
-        )));
-        tools.register(Arc::new(ListFilesTool::new(
-            validator.clone(),
-            permission_handler.clone(),
-        )));
-        tools.register(Arc::new(RunCommandTool::new(
-            validator.clone(),
-            permission_handler.clone(),
-        )));
+        let tools = create_default_registry(validator, permission_handler);
 
         let max_iterations = max_iterations
             .or(config.rustagent.max_iterations)

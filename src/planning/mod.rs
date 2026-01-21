@@ -2,11 +2,8 @@ use crate::config::Config;
 use crate::llm::factory::create_client;
 use crate::llm::{LlmClient, Message, ResponseContent};
 use crate::security::{SecurityValidator, permission::CliPermissionHandler};
-use crate::tools::{
-    ToolRegistry,
-    file::{ListFilesTool, ReadFileTool, WriteFileTool},
-    shell::RunCommandTool,
-};
+use crate::tools::ToolRegistry;
+use crate::tools::factory::create_default_registry;
 use std::io::{self, Write};
 use std::sync::Arc;
 
@@ -32,23 +29,7 @@ impl PlanningAgent {
         let permission_handler = Arc::new(CliPermissionHandler);
 
         // Create and populate tool registry
-        let registry = ToolRegistry::new();
-        registry.register(Arc::new(ReadFileTool::new(
-            validator.clone(),
-            permission_handler.clone(),
-        )));
-        registry.register(Arc::new(WriteFileTool::new(
-            validator.clone(),
-            permission_handler.clone(),
-        )));
-        registry.register(Arc::new(ListFilesTool::new(
-            validator.clone(),
-            permission_handler.clone(),
-        )));
-        registry.register(Arc::new(RunCommandTool::new(
-            validator.clone(),
-            permission_handler.clone(),
-        )));
+        let registry = create_default_registry(validator, permission_handler);
 
         // Initialize conversation with system message
         let system_message = Message::system(PLANNING_SYSTEM_PROMPT);
