@@ -84,3 +84,4 @@ pub mod factory;
 pub mod file;
 pub mod permission_check;
 pub mod shell;
+pub mod signal;

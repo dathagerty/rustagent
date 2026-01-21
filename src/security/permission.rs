@@ -20,7 +20,8 @@ pub enum ResourceType {
 pub enum PermissionResult {
     Allow,
     Deny,
-    AllowAlways(String), // Remember this decision for future
+    AllowAlways(String),
+    Quit,
 }
 
 pub struct CliPermissionHandler;
@@ -51,7 +52,7 @@ impl PermissionHandler for CliPermissionHandler {
                 };
                 PermissionResult::AllowAlways(resource.to_string())
             }
-            "q" | "quit" => std::process::exit(0),
+            "q" | "quit" => PermissionResult::Quit,
             _ => PermissionResult::Deny,
         }
     }

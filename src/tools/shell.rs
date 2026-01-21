@@ -145,6 +145,9 @@ impl Tool for RunCommandTool {
                         }
                         self.execute_command(&params).await
                     }
+                    PermissionResult::Quit => {
+                        anyhow::bail!("User requested quit")
+                    }
                 }
             }
         }

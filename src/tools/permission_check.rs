@@ -65,6 +65,9 @@ impl FilePermissionChecker {
                         allowed.insert(p);
                         Ok(())
                     }
+                    PermissionResult::Quit => {
+                        anyhow::bail!("User requested quit")
+                    }
                 }
             }
         }

@@ -72,9 +72,31 @@ async fn main() -> anyhow::Result<()> {
 
     match &cli.command {
         Commands::Init { spec_dir } => {
-            let dir = spec_dir.clone().unwrap_or_else(|| ".".to_string());
-            println!("Initializing agent in directory: {}", dir);
-            // TODO: Implement initialization logic
+            let dir = spec_dir.clone().unwrap_or_else(|| "specs".to_string());
+
+            let spec_path = std::path::Path::new(&dir);
+            if !spec_path.exists() {
+                std::fs::create_dir_all(spec_path)?;
+                println!("Created spec directory: {}", dir);
+            } else {
+                println!("Spec directory already exists: {}", dir);
+            }
+
+            let config_path = std::path::Path::new("rustagent.toml");
+            if !config_path.exists() {
+                let template = include_str!("../rustagent.toml.example");
+                std::fs::write(config_path, template)?;
+                println!("Created config template: rustagent.toml");
+                println!("Please edit rustagent.toml to add your API keys.");
+            } else {
+                println!("Config file already exists: rustagent.toml");
+            }
+
+            println!("\nInitialization complete!");
+            println!("Next steps:");
+            println!("  1. Edit rustagent.toml with your API keys");
+            println!("  2. Run 'rustagent plan' to create a spec");
+            println!("  3. Run 'rustagent run <spec-file>' to execute");
         }
         Commands::Plan { spec_dir } => {
             // Load config from standard locations

@@ -173,9 +173,29 @@ impl RalphLoop {
                 ResponseContent::ToolCalls(tool_calls) => {
                     println!("  Executing {} tool calls", tool_calls.len());
 
-                    // Execute all tool calls
+                    // Check for signal_completion tool call first
+                    for tool_call in &tool_calls {
+                        if tool_call.name == "signal_completion" {
+                            let tool = self
+                                .tools
+                                .get(&tool_call.name)
+                                .context("signal_completion tool not found")?;
+                            let result = tool.execute(tool_call.parameters.clone()).await?;
+
+                            if result.starts_with("SIGNAL:complete:") {
+                                return Ok("TASK_COMPLETE".to_string());
+                            } else if result.starts_with("SIGNAL:blocked:") {
+                                return Ok("TASK_BLOCKED".to_string());
+                            }
+                        }
+                    }
+
+                    // Execute all other tool calls
                     let mut results = Vec::new();
                     for tool_call in tool_calls {
+                        if tool_call.name == "signal_completion" {
+                            continue;
+                        }
                         println!("    Tool: {}", tool_call.name);
 
                         let tool = self.tools.get(&tool_call.name).context("Tool not found")?;
@@ -195,7 +215,9 @@ impl RalphLoop {
                     // Note: Using User role for now as Anthropic expects tool results
                     // in user messages. Future OpenAI provider will use Message::tool_result()
                     let results_text = results.join("\n\n");
-                    messages.push(Message::user(results_text));
+                    if !results_text.is_empty() {
+                        messages.push(Message::user(results_text));
+                    }
                 }
             }
         }
@@ -245,9 +267,9 @@ impl RalphLoop {
         context.push_str("1. Execute the task using available tools\n");
         context.push_str("2. Use read_file to examine code\n");
         context.push_str("3. Use write_file to create/modify files\n");
-        context.push_str("4. Use shell_command to run tests, builds, git commands\n");
-        context.push_str("5. When complete, respond with TASK_COMPLETE\n");
-        context.push_str("6. If blocked, explain why and respond with TASK_BLOCKED\n");
+        context.push_str("4. Use run_command to run tests, builds, git commands\n");
+        context.push_str("5. When complete, call signal_completion with signal='complete'\n");
+        context.push_str("6. If blocked, call signal_completion with signal='blocked' and explain why\n");
         context.push('\n');
         context.push_str("Begin executing the task now.\n");
 
