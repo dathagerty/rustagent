@@ -1,6 +1,7 @@
 use rustagent::config::{Config, LlmProvider, LlmConfig, AnthropicConfig, RustagentConfig};
 use rustagent::spec::{Spec, Task, TaskStatus};
 use tempfile::TempDir;
+use chrono::Utc;
 
 #[test]
 fn test_full_workflow() {
@@ -28,7 +29,7 @@ fn test_full_workflow() {
         name: "test-feature".to_string(),
         description: "A test feature".to_string(),
         branch_name: "feature/test".to_string(),
-        created_at: "2026-01-19T12:00:00Z".to_string(),
+        created_at: Utc::now(),
         tasks: vec![
             Task {
                 id: "task-1".to_string(),

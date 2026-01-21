@@ -3,6 +3,7 @@ use rustagent::config::Config;
 use rustagent::spec::{Spec, Task, TaskStatus};
 use tempfile::TempDir;
 use std::fs;
+use chrono::Utc;
 
 #[tokio::test]
 async fn test_ralph_loop_creation() {
@@ -26,7 +27,7 @@ spec_dir = "specs"
         name: "test".to_string(),
         description: "Test".to_string(),
         branch_name: "feature/test".to_string(),
-        created_at: "2026-01-19T12:00:00Z".to_string(),
+        created_at: Utc::now(),
         tasks: vec![],
         learnings: vec![],
     };
@@ -44,7 +45,7 @@ fn test_find_next_pending_task() {
         name: "test".to_string(),
         description: "Test".to_string(),
         branch_name: "feature/test".to_string(),
-        created_at: "2026-01-19T12:00:00Z".to_string(),
+        created_at: Utc::now(),
         tasks: vec![
             Task {
                 id: "task-1".to_string(),
@@ -53,7 +54,7 @@ fn test_find_next_pending_task() {
                 acceptance_criteria: vec![],
                 status: TaskStatus::Complete,
                 blocked_reason: None,
-                completed_at: Some("2026-01-19T13:00:00Z".to_string()),
+                completed_at: Some(Utc::now()),
             },
             Task {
                 id: "task-2".to_string(),

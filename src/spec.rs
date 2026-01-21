@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
@@ -21,7 +22,7 @@ pub struct Task {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub blocked_reason: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub completed_at: Option<String>,
+    pub completed_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -29,7 +30,7 @@ pub struct Spec {
     pub name: String,
     pub description: String,
     pub branch_name: String,
-    pub created_at: String,
+    pub created_at: DateTime<Utc>,
     pub tasks: Vec<Task>,
     pub learnings: Vec<String>,
 }

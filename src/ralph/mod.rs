@@ -105,7 +105,7 @@ impl RalphLoop {
                                 .find_task_mut(&task.id)
                                 .expect("Task should exist");
                             task_mut.status = TaskStatus::Complete;
-                            task_mut.completed_at = Some(Utc::now().to_rfc3339());
+                            task_mut.completed_at = Some(Utc::now());
                             spec.save(&self.spec_path)?;
                         }
                         "TASK_BLOCKED" => {
