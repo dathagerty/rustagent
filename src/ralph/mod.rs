@@ -188,8 +188,7 @@ impl RalphLoop {
             let response = self
                 .client
                 .chat(messages.clone(), &tool_definitions)
-                .await
-                .map_err(|e| anyhow::anyhow!("Failed to get LLM response: {}", e))?;
+                .await?;
 
             match response.content {
                 ResponseContent::Text(text) => {

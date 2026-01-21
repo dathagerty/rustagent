@@ -139,8 +139,7 @@ impl PlanningAgent {
             let response = self
                 .client
                 .chat(self.conversation.clone(), &tools)
-                .await
-                .map_err(|e| anyhow::anyhow!("LLM error: {}", e))?;
+                .await?;
 
             match response.content {
                 ResponseContent::Text(text) => {

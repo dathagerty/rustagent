@@ -71,7 +71,7 @@ impl AnthropicClient {
         &self,
         messages: &[Message],
         tools: &[ToolDefinition],
-    ) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+    ) -> anyhow::Result<serde_json::Value> {
         // Extract system message
         let system_message = messages
             .iter()
@@ -128,7 +128,7 @@ impl LlmClient for AnthropicClient {
         &self,
         messages: Vec<Message>,
         tools: &[ToolDefinition],
-    ) -> Result<Response, Box<dyn std::error::Error>> {
+    ) -> anyhow::Result<Response> {
         let request_body = self.format_request(&messages, tools)?;
 
         let mut retries = 0;
@@ -162,7 +162,7 @@ impl AnthropicClient {
     async fn send_request(
         &self,
         request_body: &serde_json::Value,
-    ) -> Result<Response, Box<dyn std::error::Error>> {
+    ) -> anyhow::Result<Response> {
         let response = self
             .client
             .post(ANTHROPIC_API_URL)
@@ -171,19 +171,15 @@ impl AnthropicClient {
             .header("content-type", "application/json")
             .json(&request_body)
             .send()
-            .await
-            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+            .await?;
 
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            return Err(format!("Anthropic API error {}: {}", status, body).into());
+            anyhow::bail!("Anthropic API error {}: {}", status, body);
         }
 
-        let anthropic_response: AnthropicResponse = response
-            .json()
-            .await
-            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+        let anthropic_response: AnthropicResponse = response.json().await?;
 
         let content = if anthropic_response
             .content

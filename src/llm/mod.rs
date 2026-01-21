@@ -95,12 +95,12 @@ pub struct Response {
 
 /// Trait for LLM client implementations
 #[async_trait]
-pub trait LlmClient {
+pub trait LlmClient: Send + Sync {
     async fn chat(
         &self,
         messages: Vec<Message>,
         tools: &[ToolDefinition],
-    ) -> Result<Response, Box<dyn std::error::Error>>;
+    ) -> anyhow::Result<Response>;
 }
 
 pub mod anthropic;
