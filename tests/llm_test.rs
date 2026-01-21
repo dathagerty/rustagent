@@ -83,3 +83,21 @@ fn test_format_request_with_system_message() {
     assert_eq!(msgs.len(), 1);
     assert_eq!(msgs[0].get("role").unwrap().as_str().unwrap(), "user");
 }
+
+use rustagent::llm::anthropic::is_retryable_error;
+
+#[test]
+fn test_is_retryable_error() {
+    // Test retryable errors
+    assert!(is_retryable_error("rate limit exceeded"));
+    assert!(is_retryable_error("connection timeout"));
+    assert!(is_retryable_error("network error"));
+    assert!(is_retryable_error("502 Bad Gateway"));
+    assert!(is_retryable_error("503 Service Unavailable"));
+    assert!(is_retryable_error("504 Gateway Timeout"));
+
+    // Test non-retryable errors
+    assert!(!is_retryable_error("invalid request"));
+    assert!(!is_retryable_error("400 Bad Request"));
+    assert!(!is_retryable_error("401 Unauthorized"));
+}

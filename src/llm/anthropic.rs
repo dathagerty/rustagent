@@ -2,6 +2,7 @@ use super::{LlmClient, Message, Response, ResponseContent, Role, ToolCall, ToolD
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use tokio::time::{sleep, Duration};
 
 const ANTHROPIC_API_URL: &str = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION: &str = "2023-06-01";
@@ -127,6 +128,38 @@ impl LlmClient for AnthropicClient {
     ) -> Result<Response, Box<dyn std::error::Error>> {
         let request_body = self.format_request(&messages, tools)?;
 
+        let mut retries = 0;
+        let max_retries = 3;
+
+        loop {
+            let error_msg = match self.send_request(&request_body).await {
+                Ok(response) => return Ok(response),
+                Err(e) => {
+                    let msg = e.to_string();
+                    if retries >= max_retries || !is_retryable_error(&msg) {
+                        return Err(e);
+                    }
+                    msg
+                } // e is dropped here
+            };
+
+            // Now we're outside the match, e has been dropped
+            retries += 1;
+            let delay = Duration::from_secs(2u64.pow(retries));
+            eprintln!(
+                "API call failed, retrying in {:?} (attempt {}/{}): {}",
+                delay, retries, max_retries, error_msg
+            );
+            sleep(delay).await;
+        }
+    }
+}
+
+impl AnthropicClient {
+    async fn send_request(
+        &self,
+        request_body: &serde_json::Value,
+    ) -> Result<Response, Box<dyn std::error::Error>> {
         let response = self
             .client
             .post(ANTHROPIC_API_URL)
@@ -185,4 +218,15 @@ impl LlmClient for AnthropicClient {
             stop_reason: anthropic_response.stop_reason,
         })
     }
+}
+
+pub fn is_retryable_error(error_msg: &str) -> bool {
+    let msg = error_msg.to_lowercase();
+    msg.contains("rate limit")
+        || msg.contains("timeout")
+        || msg.contains("connection")
+        || msg.contains("network")
+        || msg.contains("502")
+        || msg.contains("503")
+        || msg.contains("504")
 }
