@@ -17,6 +17,8 @@ pub struct AnthropicClient {
 struct AnthropicRequest {
     model: String,
     max_tokens: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    system: Option<String>,
     messages: Vec<AnthropicMessage>,
     #[serde(skip_serializing_if = "Option::is_none")]
     tools: Option<Vec<AnthropicTool>>,
@@ -69,6 +71,13 @@ impl AnthropicClient {
         messages: &[Message],
         tools: &[ToolDefinition],
     ) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+        // Extract system message
+        let system_message = messages
+            .iter()
+            .find(|m| m.role == Role::System)
+            .map(|m| m.content.clone());
+
+        // Filter out system messages from messages array
         let anthropic_messages: Vec<AnthropicMessage> = messages
             .iter()
             .filter(|m| m.role != Role::System)
@@ -76,7 +85,7 @@ impl AnthropicClient {
                 role: match m.role {
                     Role::User => "user".to_string(),
                     Role::Assistant => "assistant".to_string(),
-                    Role::System => "user".to_string(),
+                    Role::System => unreachable!("System messages filtered out"),
                 },
                 content: m.content.clone(),
             })
@@ -100,6 +109,7 @@ impl AnthropicClient {
         let request = AnthropicRequest {
             model: self.model.clone(),
             max_tokens: self.max_tokens,
+            system: system_message,
             messages: anthropic_messages,
             tools: anthropic_tools,
         };

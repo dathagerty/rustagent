@@ -49,3 +49,37 @@ async fn test_anthropic_message_format() {
     // We'll test this by mocking in future, for now just construct
     assert!(client.format_request(&messages, &[]).is_ok());
 }
+
+#[test]
+fn test_format_request_with_system_message() {
+    let client = AnthropicClient::new(
+        "test-key".to_string(),
+        "claude-sonnet-4".to_string(),
+        4096,
+    );
+
+    let messages = vec![
+        Message {
+            role: Role::System,
+            content: "You are a helpful assistant".to_string(),
+        },
+        Message {
+            role: Role::User,
+            content: "Hello".to_string(),
+        },
+    ];
+
+    let request = client.format_request(&messages, &[]).unwrap();
+
+    // Should have system field
+    assert!(request.get("system").is_some());
+    assert_eq!(
+        request.get("system").unwrap().as_str().unwrap(),
+        "You are a helpful assistant"
+    );
+
+    // Should not include system message in messages array
+    let msgs = request.get("messages").unwrap().as_array().unwrap();
+    assert_eq!(msgs.len(), 1);
+    assert_eq!(msgs[0].get("role").unwrap().as_str().unwrap(), "user");
+}
