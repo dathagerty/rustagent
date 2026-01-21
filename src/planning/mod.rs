@@ -1,8 +1,12 @@
 use crate::config::{Config, LlmProvider};
-use crate::llm::{LlmClient, Message, ResponseContent, Role};
 use crate::llm::anthropic::AnthropicClient;
+use crate::llm::{LlmClient, Message, ResponseContent, Role};
 use crate::security::{SecurityValidator, permission::CliPermissionHandler};
-use crate::tools::{ToolRegistry, file::{ReadFileTool, WriteFileTool, ListFilesTool}, shell::RunCommandTool};
+use crate::tools::{
+    ToolRegistry,
+    file::{ListFilesTool, ReadFileTool, WriteFileTool},
+    shell::RunCommandTool,
+};
 use std::io::{self, Write};
 use std::sync::Arc;
 
@@ -23,11 +27,9 @@ impl PlanningAgent {
         // Create LLM client based on provider
         let client: Box<dyn LlmClient> = match llm_config.provider {
             LlmProvider::Anthropic => {
-                let anthropic_config = config.anthropic
-                    .as_ref()
-                    .ok_or_else(|| anyhow::anyhow!(
-                        "Anthropic provider selected but [anthropic] config missing"
-                    ))?;
+                let anthropic_config = config.anthropic.as_ref().ok_or_else(|| {
+                    anyhow::anyhow!("Anthropic provider selected but [anthropic] config missing")
+                })?;
 
                 Box::new(AnthropicClient::new(
                     anthropic_config.api_key.clone(),
@@ -192,10 +194,7 @@ impl PlanningAgent {
                         // Add tool result to conversation
                         self.conversation.push(Message {
                             role: Role::User,
-                            content: format!(
-                                "Tool result for {}:\n{}",
-                                tool_call.name, output
-                            ),
+                            content: format!("Tool result for {}:\n{}", tool_call.name, output),
                         });
                     }
 

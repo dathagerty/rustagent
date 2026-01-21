@@ -3,9 +3,9 @@ use crate::llm::anthropic::AnthropicClient;
 use crate::llm::{LlmClient, Message, ResponseContent, Role};
 use crate::security::{SecurityValidator, permission::CliPermissionHandler};
 use crate::spec::{Spec, TaskStatus};
+use crate::tools::ToolRegistry;
 use crate::tools::file::{ListFilesTool, ReadFileTool, WriteFileTool};
 use crate::tools::shell::RunCommandTool;
-use crate::tools::ToolRegistry;
 use anyhow::{Context, Result};
 use chrono::Utc;
 use std::sync::Arc;
@@ -27,11 +27,9 @@ impl RalphLoop {
         // Create LLM client based on provider
         let client: Arc<dyn LlmClient> = match llm_config.provider {
             LlmProvider::Anthropic => {
-                let anthropic_config = config.anthropic
-                    .as_ref()
-                    .ok_or_else(|| anyhow::anyhow!(
-                        "Anthropic provider selected but [anthropic] config missing"
-                    ))?;
+                let anthropic_config = config.anthropic.as_ref().ok_or_else(|| {
+                    anyhow::anyhow!("Anthropic provider selected but [anthropic] config missing")
+                })?;
 
                 Arc::new(AnthropicClient::new(
                     anthropic_config.api_key.clone(),
@@ -99,8 +97,7 @@ impl RalphLoop {
             println!("=== Iteration {} ===", iteration);
 
             // Load spec fresh each iteration
-            let mut spec = Spec::load(&self.spec_path)
-                .context("Failed to load spec")?;
+            let mut spec = Spec::load(&self.spec_path).context("Failed to load spec")?;
 
             // Find next pending task
             let task = match spec.find_next_task() {
@@ -120,8 +117,7 @@ impl RalphLoop {
                     .context("Task not found in spec")?;
                 task_mut.status = TaskStatus::InProgress;
             }
-            spec.save(&self.spec_path)
-                .context("Failed to save spec")?;
+            spec.save(&self.spec_path).context("Failed to save spec")?;
 
             // Execute the task
             match self.execute_task(&task.id).await {
@@ -224,23 +220,15 @@ impl RalphLoop {
                     for tool_call in tool_calls {
                         println!("    Tool: {}", tool_call.name);
 
-                        let tool = self
-                            .tools
-                            .get(&tool_call.name)
-                            .context("Tool not found")?;
+                        let tool = self.tools.get(&tool_call.name).context("Tool not found")?;
 
                         match tool.execute(tool_call.parameters).await {
                             Ok(output) => {
-                                results.push(format!(
-                                    "Tool: {}\nResult: {}",
-                                    tool_call.name, output
-                                ));
+                                results
+                                    .push(format!("Tool: {}\nResult: {}", tool_call.name, output));
                             }
                             Err(e) => {
-                                results.push(format!(
-                                    "Tool: {}\nError: {}",
-                                    tool_call.name, e
-                                ));
+                                results.push(format!("Tool: {}\nError: {}", tool_call.name, e));
                             }
                         }
                     }

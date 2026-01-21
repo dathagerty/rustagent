@@ -45,11 +45,7 @@ impl PermissionHandler for CliPermissionHandler {
                 let resource = match request.resource_type {
                     ResourceType::ShellCommand => {
                         // Extract base command
-                        request
-                            .action
-                            .split_whitespace()
-                            .next()
-                            .unwrap_or("")
+                        request.action.split_whitespace().next().unwrap_or("")
                     }
                     ResourceType::FilePath => &request.action,
                 };

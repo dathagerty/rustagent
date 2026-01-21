@@ -1,4 +1,6 @@
-use crate::security::permission::{PermissionHandler, PermissionRequest, PermissionResult, ResourceType};
+use crate::security::permission::{
+    PermissionHandler, PermissionRequest, PermissionResult, ResourceType,
+};
 use crate::security::{SecurityValidator, ValidationResult};
 use crate::tools::Tool;
 use anyhow::Result;
@@ -61,11 +63,7 @@ impl RunCommandTool {
 
         let status = child.wait().await?;
 
-        let output = if !stdout.is_empty() {
-            stdout
-        } else {
-            stderr
-        };
+        let output = if !stdout.is_empty() { stdout } else { stderr };
 
         if status.success() {
             Ok(output)

@@ -139,7 +139,8 @@ async fn test_run_command_tool() {
         max_file_size_mb: 10,
         allowed_paths: vec![".".to_string()],
     };
-    let validator = std::sync::Arc::new(rustagent::security::SecurityValidator::new(config).unwrap());
+    let validator =
+        std::sync::Arc::new(rustagent::security::SecurityValidator::new(config).unwrap());
     let handler = std::sync::Arc::new(rustagent::security::permission::AutoApproveHandler);
 
     let tool = RunCommandTool::new(validator, handler);
@@ -164,7 +165,8 @@ async fn test_run_command_with_working_dir() {
         max_file_size_mb: 10,
         allowed_paths: vec![".".to_string()],
     };
-    let validator = std::sync::Arc::new(rustagent::security::SecurityValidator::new(config).unwrap());
+    let validator =
+        std::sync::Arc::new(rustagent::security::SecurityValidator::new(config).unwrap());
     let handler = std::sync::Arc::new(rustagent::security::permission::AutoApproveHandler);
 
     let tool = RunCommandTool::new(validator, handler);
@@ -190,13 +192,9 @@ fn test_registry_clone_and_concurrent_access() {
     let registry1 = registry.clone();
     let registry2 = registry.clone();
 
-    let handle1 = thread::spawn(move || {
-        registry1.get("mock_tool").is_some()
-    });
+    let handle1 = thread::spawn(move || registry1.get("mock_tool").is_some());
 
-    let handle2 = thread::spawn(move || {
-        registry2.get("mock_tool").is_some()
-    });
+    let handle2 = thread::spawn(move || registry2.get("mock_tool").is_some());
 
     assert!(handle1.join().unwrap());
     assert!(handle2.join().unwrap());
@@ -217,8 +215,8 @@ fn test_registry_register_while_reading() {
     handle.join().unwrap();
 }
 
-use rustagent::security::{SecurityValidator, permission::AutoApproveHandler};
 use rustagent::config::{SecurityConfig, ShellPolicy};
+use rustagent::security::{SecurityValidator, permission::AutoApproveHandler};
 use std::collections::HashSet;
 
 #[tokio::test]

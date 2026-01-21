@@ -79,7 +79,12 @@ spec_dir = "specs"
 
     // Should have default security config
     assert_eq!(config.security.shell_policy, ShellPolicy::Allowlist);
-    assert!(config.security.allowed_commands.contains(&"git".to_string()));
+    assert!(
+        config
+            .security
+            .allowed_commands
+            .contains(&"git".to_string())
+    );
     assert_eq!(config.security.max_file_size_mb, 10);
     assert_eq!(config.security.allowed_paths, vec![".".to_string()]);
 }

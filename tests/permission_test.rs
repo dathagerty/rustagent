@@ -1,5 +1,5 @@
 use rustagent::security::permission::{
-    PermissionHandler, PermissionRequest, PermissionResult, ResourceType, AutoApproveHandler,
+    AutoApproveHandler, PermissionHandler, PermissionRequest, PermissionResult, ResourceType,
 };
 
 #[test]
@@ -13,7 +13,7 @@ fn test_auto_approve_handler() {
     };
 
     match handler.request_permission(&request) {
-        PermissionResult::Allow => {},
+        PermissionResult::Allow => {}
         _ => panic!("Expected auto-approve"),
     }
 }

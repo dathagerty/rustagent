@@ -16,13 +16,13 @@ fn test_allowlist_policy() {
 
     // Allowed command
     match validator.validate_shell_command("git status") {
-        ValidationResult::Allowed => {},
+        ValidationResult::Allowed => {}
         _ => panic!("Expected allowed"),
     }
 
     // Not in allowlist
     match validator.validate_shell_command("rm file") {
-        ValidationResult::RequiresPermission(_) => {},
+        ValidationResult::RequiresPermission(_) => {}
         _ => panic!("Expected permission required"),
     }
 }
@@ -41,13 +41,13 @@ fn test_blocklist_policy() {
 
     // Safe command
     match validator.validate_shell_command("ls -la") {
-        ValidationResult::Allowed => {},
+        ValidationResult::Allowed => {}
         _ => panic!("Expected allowed"),
     }
 
     // Blocked pattern
     match validator.validate_shell_command("rm -rf /") {
-        ValidationResult::Denied(_) => {},
+        ValidationResult::Denied(_) => {}
         _ => panic!("Expected denied"),
     }
 }
@@ -66,7 +66,7 @@ fn test_path_validation() {
 
     // Path in current directory
     match validator.validate_file_path(&PathBuf::from("./test.txt")) {
-        ValidationResult::Allowed => {},
+        ValidationResult::Allowed => {}
         _ => panic!("Expected allowed"),
     }
 }

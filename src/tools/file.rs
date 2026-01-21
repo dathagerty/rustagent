@@ -1,4 +1,6 @@
-use crate::security::permission::{PermissionHandler, PermissionRequest, PermissionResult, ResourceType};
+use crate::security::permission::{
+    PermissionHandler, PermissionRequest, PermissionResult, ResourceType,
+};
 use crate::security::{SecurityValidator, ValidationResult};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
@@ -104,7 +106,7 @@ impl Tool for ReadFileTool {
 
         // Check file size
         match self.validator.check_file_size(path) {
-            ValidationResult::Allowed => {},
+            ValidationResult::Allowed => {}
             ValidationResult::Denied(reason) => {
                 anyhow::bail!("File too large: {}", reason);
             }
@@ -222,9 +224,10 @@ impl Tool for WriteFileTool {
 
         // Create parent directories if they don't exist
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)
-                .await
-                .context(format!("Failed to create parent directories for: {}", path.display()))?;
+            fs::create_dir_all(parent).await.context(format!(
+                "Failed to create parent directories for: {}",
+                path.display()
+            ))?;
         }
 
         fs::write(path, content)

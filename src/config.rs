@@ -159,17 +159,11 @@ impl Config {
     }
 
     pub fn planning_llm(&self) -> &LlmConfig {
-        self.planning
-            .as_ref()
-            .map(|m| &m.llm)
-            .unwrap_or(&self.llm)
+        self.planning.as_ref().map(|m| &m.llm).unwrap_or(&self.llm)
     }
 
     pub fn ralph_llm(&self) -> &LlmConfig {
-        self.ralph
-            .as_ref()
-            .map(|m| &m.llm)
-            .unwrap_or(&self.llm)
+        self.ralph.as_ref().map(|m| &m.llm).unwrap_or(&self.llm)
     }
 }
 

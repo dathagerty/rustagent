@@ -59,7 +59,9 @@ fn find_config_path() -> anyhow::Result<PathBuf> {
         }
     }
 
-    anyhow::bail!("Config file not found. Please create rustagent.toml in current directory or ~/.rustagent/config.toml")
+    anyhow::bail!(
+        "Config file not found. Please create rustagent.toml in current directory or ~/.rustagent/config.toml"
+    )
 }
 
 #[tokio::main]
@@ -88,7 +90,10 @@ async fn main() -> anyhow::Result<()> {
             let mut agent = planning::PlanningAgent::new(config, dir)?;
             agent.run().await?;
         }
-        Commands::Run { spec_file, max_iterations } => {
+        Commands::Run {
+            spec_file,
+            max_iterations,
+        } => {
             // Load config from standard locations
             let config_path = find_config_path()?;
             let config = config::Config::load(&config_path)?;

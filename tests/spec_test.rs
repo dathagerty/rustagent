@@ -1,6 +1,6 @@
+use chrono::Utc;
 use rustagent::spec::{Spec, Task, TaskStatus};
 use tempfile::TempDir;
-use chrono::Utc;
 
 #[test]
 fn test_spec_serialization() {
@@ -85,7 +85,8 @@ fn test_task_completion_timestamp() {
 #[test]
 fn test_spec_save_creates_parent_directories() {
     let dir = tempfile::tempdir().unwrap();
-    let nested_path = dir.path()
+    let nested_path = dir
+        .path()
         .join("level1")
         .join("level2")
         .join("level3")

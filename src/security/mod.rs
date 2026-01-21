@@ -1,5 +1,5 @@
 use crate::config::{SecurityConfig, ShellPolicy};
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use regex::Regex;
 use std::path::{Path, PathBuf};
 
@@ -89,7 +89,7 @@ impl SecurityValidator {
                     match parent.canonicalize() {
                         Ok(p) => p.join(path.file_name().unwrap()),
                         Err(_) => {
-                            return ValidationResult::Denied("Cannot resolve path".to_string())
+                            return ValidationResult::Denied("Cannot resolve path".to_string());
                         }
                     }
                 } else {

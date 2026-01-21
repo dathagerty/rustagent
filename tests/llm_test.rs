@@ -35,11 +35,7 @@ use rustagent::llm::anthropic::AnthropicClient;
 #[tokio::test]
 async fn test_anthropic_message_format() {
     // This test validates request structure, doesn't actually call API
-    let client = AnthropicClient::new(
-        "test-key".to_string(),
-        "claude-sonnet-4".to_string(),
-        4096,
-    );
+    let client = AnthropicClient::new("test-key".to_string(), "claude-sonnet-4".to_string(), 4096);
 
     let messages = vec![Message {
         role: Role::User,
@@ -52,11 +48,7 @@ async fn test_anthropic_message_format() {
 
 #[test]
 fn test_format_request_with_system_message() {
-    let client = AnthropicClient::new(
-        "test-key".to_string(),
-        "claude-sonnet-4".to_string(),
-        4096,
-    );
+    let client = AnthropicClient::new("test-key".to_string(), "claude-sonnet-4".to_string(), 4096);
 
     let messages = vec![
         Message {

@@ -1,7 +1,9 @@
-use rustagent::config::{Config, LlmProvider, LlmConfig, AnthropicConfig, RustagentConfig, SecurityConfig};
+use chrono::Utc;
+use rustagent::config::{
+    AnthropicConfig, Config, LlmConfig, LlmProvider, RustagentConfig, SecurityConfig,
+};
 use rustagent::spec::{Spec, Task, TaskStatus};
 use tempfile::TempDir;
-use chrono::Utc;
 
 #[test]
 fn test_full_workflow() {
@@ -34,17 +36,15 @@ fn test_full_workflow() {
         description: "A test feature".to_string(),
         branch_name: "feature/test".to_string(),
         created_at: Utc::now(),
-        tasks: vec![
-            Task {
-                id: "task-1".to_string(),
-                title: "First task".to_string(),
-                description: "Do the first thing".to_string(),
-                acceptance_criteria: vec!["Must work".to_string()],
-                status: TaskStatus::Pending,
-                blocked_reason: None,
-                completed_at: None,
-            },
-        ],
+        tasks: vec![Task {
+            id: "task-1".to_string(),
+            title: "First task".to_string(),
+            description: "Do the first thing".to_string(),
+            acceptance_criteria: vec!["Must work".to_string()],
+            status: TaskStatus::Pending,
+            blocked_reason: None,
+            completed_at: None,
+        }],
         learnings: vec![],
     };
 

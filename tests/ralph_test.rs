@@ -1,9 +1,9 @@
-use rustagent::ralph::RalphLoop;
-use rustagent::config::Config;
-use rustagent::spec::{Spec, Task, TaskStatus};
-use tempfile::TempDir;
-use std::fs;
 use chrono::Utc;
+use rustagent::config::Config;
+use rustagent::ralph::RalphLoop;
+use rustagent::spec::{Spec, Task, TaskStatus};
+use std::fs;
+use tempfile::TempDir;
 
 #[tokio::test]
 async fn test_ralph_loop_creation() {
@@ -11,7 +11,9 @@ async fn test_ralph_loop_creation() {
     let config_path = temp.path().join("config.toml");
     let spec_path = temp.path().join("test.json");
 
-    fs::write(&config_path, r#"
+    fs::write(
+        &config_path,
+        r#"
 [llm]
 provider = "anthropic"
 model = "claude-sonnet-4-20250514"
@@ -21,7 +23,9 @@ api_key = "test-key"
 
 [rustagent]
 spec_dir = "specs"
-"#).unwrap();
+"#,
+    )
+    .unwrap();
 
     let spec = Spec {
         name: "test".to_string(),
