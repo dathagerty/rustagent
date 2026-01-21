@@ -254,7 +254,7 @@ impl RalphLoop {
             for criterion in &task.acceptance_criteria {
                 context.push_str(&format!("- {}\n", criterion));
             }
-            context.push_str("\n");
+            context.push('\n');
         }
 
         if !spec.learnings.is_empty() {
@@ -262,7 +262,7 @@ impl RalphLoop {
             for learning in &spec.learnings {
                 context.push_str(&format!("- {}\n", learning));
             }
-            context.push_str("\n");
+            context.push('\n');
         }
 
         context.push_str("INSTRUCTIONS:\n");
@@ -272,7 +272,7 @@ impl RalphLoop {
         context.push_str("4. Use shell_command to run tests, builds, git commands\n");
         context.push_str("5. When complete, respond with TASK_COMPLETE\n");
         context.push_str("6. If blocked, explain why and respond with TASK_BLOCKED\n");
-        context.push_str("\n");
+        context.push('\n');
         context.push_str("Begin executing the task now.\n");
 
         Ok(context)

@@ -126,10 +126,8 @@ impl PlanningAgent {
                     println!("\nAssistant: {}\n", text);
 
                     // Check for completion
-                    if let Some(stop_reason) = &response.stop_reason {
-                        if stop_reason == "end_turn" {
-                            return Ok(true);
-                        }
+                    if matches!(response.stop_reason.as_deref(), Some("end_turn")) {
+                        return Ok(true);
                     }
 
                     return Ok(true);
