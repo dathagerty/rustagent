@@ -1,6 +1,7 @@
-use async_trait::async_trait;
 use anyhow::Result;
+use async_trait::async_trait;
 use std::collections::HashMap;
+use std::sync::{Arc, RwLock};
 
 use crate::llm::ToolDefinition;
 
@@ -22,36 +23,39 @@ pub trait Tool: Send + Sync {
 
 /// Registry for managing available tools
 pub struct ToolRegistry {
-    tools: HashMap<String, Box<dyn Tool>>,
+    tools: Arc<RwLock<HashMap<String, Arc<dyn Tool>>>>,
 }
 
 impl ToolRegistry {
     /// Creates a new empty tool registry
     pub fn new() -> Self {
         Self {
-            tools: HashMap::new(),
+            tools: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
     /// Registers a new tool in the registry
-    pub fn register(&mut self, tool: Box<dyn Tool>) {
-        let name = tool.name().to_string();
-        self.tools.insert(name, tool);
+    pub fn register(&self, tool: Arc<dyn Tool>) {
+        let mut tools = self.tools.write().unwrap();
+        tools.insert(tool.name().to_string(), tool);
     }
 
     /// Gets a tool by name
-    pub fn get(&self, name: &str) -> Option<&dyn Tool> {
-        self.tools.get(name).map(|b| &**b)
+    pub fn get(&self, name: &str) -> Option<Arc<dyn Tool>> {
+        let tools = self.tools.read().unwrap();
+        tools.get(name).cloned()
     }
 
     /// Lists all registered tool names
-    pub fn list(&self) -> Vec<&str> {
-        self.tools.keys().map(|s| s.as_str()).collect()
+    pub fn list(&self) -> Vec<String> {
+        let tools = self.tools.read().unwrap();
+        tools.keys().cloned().collect()
     }
 
     /// Converts all registered tools to LLM tool definitions
     pub fn definitions(&self) -> Vec<ToolDefinition> {
-        self.tools
+        let tools = self.tools.read().unwrap();
+        tools
             .values()
             .map(|tool| ToolDefinition {
                 name: tool.name().to_string(),
@@ -59,6 +63,14 @@ impl ToolRegistry {
                 parameters: tool.parameters(),
             })
             .collect()
+    }
+}
+
+impl Clone for ToolRegistry {
+    fn clone(&self) -> Self {
+        Self {
+            tools: Arc::clone(&self.tools),
+        }
     }
 }
 

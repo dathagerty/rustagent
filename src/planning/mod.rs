@@ -3,6 +3,7 @@ use crate::llm::{LlmClient, Message, ResponseContent, Role};
 use crate::llm::anthropic::AnthropicClient;
 use crate::tools::{ToolRegistry, file::{ReadFileTool, WriteFileTool, ListFilesTool}, shell::RunCommandTool};
 use std::io::{self, Write};
+use std::sync::Arc;
 
 /// Planning agent for interactive spec creation
 pub struct PlanningAgent {
@@ -28,11 +29,11 @@ impl PlanningAgent {
         };
 
         // Create and populate tool registry
-        let mut registry = ToolRegistry::new();
-        registry.register(Box::new(ReadFileTool));
-        registry.register(Box::new(WriteFileTool));
-        registry.register(Box::new(ListFilesTool));
-        registry.register(Box::new(RunCommandTool));
+        let registry = ToolRegistry::new();
+        registry.register(Arc::new(ReadFileTool));
+        registry.register(Arc::new(WriteFileTool));
+        registry.register(Arc::new(ListFilesTool));
+        registry.register(Arc::new(RunCommandTool));
 
         // Initialize conversation with system message
         let system_message = Message {

@@ -33,11 +33,11 @@ impl RalphLoop {
         };
 
         // Register tools
-        let mut tools = ToolRegistry::new();
-        tools.register(Box::new(ReadFileTool));
-        tools.register(Box::new(WriteFileTool));
-        tools.register(Box::new(ListFilesTool));
-        tools.register(Box::new(RunCommandTool));
+        let tools = ToolRegistry::new();
+        tools.register(Arc::new(ReadFileTool));
+        tools.register(Arc::new(WriteFileTool));
+        tools.register(Arc::new(ListFilesTool));
+        tools.register(Arc::new(RunCommandTool));
 
         let max_iterations = max_iterations
             .or(config.rustagent.max_iterations)
