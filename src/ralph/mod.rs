@@ -1,6 +1,7 @@
 use crate::config::{Config, LlmProvider};
 use crate::llm::anthropic::AnthropicClient;
 use crate::llm::{LlmClient, Message, ResponseContent, Role};
+use crate::security::{SecurityValidator, permission::CliPermissionHandler};
 use crate::spec::{Spec, TaskStatus};
 use crate::tools::file::{ListFilesTool, ReadFileTool, WriteFileTool};
 use crate::tools::shell::RunCommandTool;
@@ -32,12 +33,19 @@ impl RalphLoop {
             _ => panic!("Only Anthropic provider is currently supported"),
         };
 
+        // Create security validator and permission handler
+        let validator = Arc::new(SecurityValidator::new(config.security.clone()).expect("Failed to create security validator"));
+        let permission_handler = Arc::new(CliPermissionHandler);
+
         // Register tools
         let tools = ToolRegistry::new();
         tools.register(Arc::new(ReadFileTool));
         tools.register(Arc::new(WriteFileTool));
         tools.register(Arc::new(ListFilesTool));
-        tools.register(Arc::new(RunCommandTool));
+        tools.register(Arc::new(RunCommandTool::new(
+            validator.clone(),
+            permission_handler.clone(),
+        )));
 
         let max_iterations = max_iterations
             .or(config.rustagent.max_iterations)

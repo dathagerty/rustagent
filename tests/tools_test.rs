@@ -102,7 +102,17 @@ async fn test_list_files_tool() {
 
 #[tokio::test]
 async fn test_run_command_tool() {
-    let tool = RunCommandTool;
+    let config = rustagent::config::SecurityConfig {
+        shell_policy: rustagent::config::ShellPolicy::Allowlist,
+        allowed_commands: vec!["echo".to_string()],
+        blocked_patterns: vec![],
+        max_file_size_mb: 10,
+        allowed_paths: vec![".".to_string()],
+    };
+    let validator = std::sync::Arc::new(rustagent::security::SecurityValidator::new(config).unwrap());
+    let handler = std::sync::Arc::new(rustagent::security::permission::AutoApproveHandler);
+
+    let tool = RunCommandTool::new(validator, handler);
     let result = tool
         .execute(json!({
             "command": "echo hello"
@@ -117,7 +127,17 @@ async fn test_run_command_tool() {
 async fn test_run_command_with_working_dir() {
     let temp = TempDir::new().unwrap();
 
-    let tool = RunCommandTool;
+    let config = rustagent::config::SecurityConfig {
+        shell_policy: rustagent::config::ShellPolicy::Allowlist,
+        allowed_commands: vec!["pwd".to_string()],
+        blocked_patterns: vec![],
+        max_file_size_mb: 10,
+        allowed_paths: vec![".".to_string()],
+    };
+    let validator = std::sync::Arc::new(rustagent::security::SecurityValidator::new(config).unwrap());
+    let handler = std::sync::Arc::new(rustagent::security::permission::AutoApproveHandler);
+
+    let tool = RunCommandTool::new(validator, handler);
     let result = tool
         .execute(json!({
             "command": "pwd",
@@ -165,4 +185,58 @@ fn test_registry_register_while_reading() {
     let _ = registry.list();
 
     handle.join().unwrap();
+}
+
+use rustagent::security::{SecurityValidator, permission::AutoApproveHandler};
+use rustagent::config::{SecurityConfig, ShellPolicy};
+use std::collections::HashSet;
+
+#[tokio::test]
+async fn test_run_command_with_allowlist() {
+    let config = SecurityConfig {
+        shell_policy: ShellPolicy::Allowlist,
+        allowed_commands: vec!["echo".to_string()],
+        blocked_patterns: vec![],
+        max_file_size_mb: 10,
+        allowed_paths: vec![".".to_string()],
+    };
+
+    let validator = Arc::new(SecurityValidator::new(config).unwrap());
+    let handler = Arc::new(AutoApproveHandler);
+
+    let tool = RunCommandTool::new(validator, handler);
+
+    // Allowed command should work
+    let params = serde_json::json!({
+        "command": "echo hello",
+        "working_dir": null
+    });
+
+    let result = tool.execute(params).await;
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn test_run_command_blocked() {
+    let config = SecurityConfig {
+        shell_policy: ShellPolicy::Allowlist,
+        allowed_commands: vec!["echo".to_string()],
+        blocked_patterns: vec![],
+        max_file_size_mb: 10,
+        allowed_paths: vec![".".to_string()],
+    };
+
+    let validator = Arc::new(SecurityValidator::new(config).unwrap());
+    let handler = Arc::new(AutoApproveHandler);
+
+    let tool = RunCommandTool::new(validator, handler);
+
+    // Not allowed command (but handler will auto-approve)
+    let params = serde_json::json!({
+        "command": "ls",
+        "working_dir": null
+    });
+
+    let result = tool.execute(params).await;
+    assert!(result.is_ok()); // AutoApproveHandler allows it
 }

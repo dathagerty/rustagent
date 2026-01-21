@@ -1,6 +1,7 @@
 use crate::config::{Config, LlmProvider};
 use crate::llm::{LlmClient, Message, ResponseContent, Role};
 use crate::llm::anthropic::AnthropicClient;
+use crate::security::{SecurityValidator, permission::CliPermissionHandler};
 use crate::tools::{ToolRegistry, file::{ReadFileTool, WriteFileTool, ListFilesTool}, shell::RunCommandTool};
 use std::io::{self, Write};
 use std::sync::Arc;
@@ -28,12 +29,19 @@ impl PlanningAgent {
             _ => panic!("Unsupported LLM provider"),
         };
 
+        // Create security validator and permission handler
+        let validator = Arc::new(SecurityValidator::new(config.security.clone()).expect("Failed to create security validator"));
+        let permission_handler = Arc::new(CliPermissionHandler);
+
         // Create and populate tool registry
         let registry = ToolRegistry::new();
         registry.register(Arc::new(ReadFileTool));
         registry.register(Arc::new(WriteFileTool));
         registry.register(Arc::new(ListFilesTool));
-        registry.register(Arc::new(RunCommandTool));
+        registry.register(Arc::new(RunCommandTool::new(
+            validator.clone(),
+            permission_handler.clone(),
+        )));
 
         // Initialize conversation with system message
         let system_message = Message {
