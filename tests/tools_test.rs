@@ -134,7 +134,7 @@ use std::thread;
 
 #[test]
 fn test_registry_clone_and_concurrent_access() {
-    let mut registry = ToolRegistry::new();
+    let registry = ToolRegistry::new();
     registry.register(Arc::new(MockTool));
 
     let registry1 = registry.clone();

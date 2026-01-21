@@ -37,6 +37,60 @@ pub struct RustagentConfig {
     pub max_iterations: Option<usize>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum ShellPolicy {
+    Allowlist,
+    Blocklist,
+    Unrestricted,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SecurityConfig {
+    #[serde(default = "default_shell_policy")]
+    pub shell_policy: ShellPolicy,
+
+    #[serde(default = "default_allowed_commands")]
+    pub allowed_commands: Vec<String>,
+
+    #[serde(default)]
+    pub blocked_patterns: Vec<String>,
+
+    #[serde(default = "default_max_file_size_mb")]
+    pub max_file_size_mb: u64,
+
+    #[serde(default = "default_allowed_paths")]
+    pub allowed_paths: Vec<String>,
+}
+
+fn default_shell_policy() -> ShellPolicy {
+    ShellPolicy::Allowlist
+}
+
+fn default_allowed_commands() -> Vec<String> {
+    vec![
+        "git".to_string(),
+        "cargo".to_string(),
+        "npm".to_string(),
+        "ls".to_string(),
+        "cat".to_string(),
+        "grep".to_string(),
+        "find".to_string(),
+        "echo".to_string(),
+        "pwd".to_string(),
+        "mkdir".to_string(),
+        "touch".to_string(),
+    ]
+}
+
+fn default_max_file_size_mb() -> u64 {
+    10
+}
+
+fn default_allowed_paths() -> Vec<String> {
+    vec![".".to_string()]
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub llm: LlmConfig,
@@ -44,18 +98,18 @@ pub struct Config {
     pub openai: Option<OpenAiConfig>,
     pub ollama: Option<OllamaConfig>,
     pub rustagent: RustagentConfig,
+    #[serde(default)]
+    pub security: SecurityConfig,
 }
 
 impl Config {
     pub fn load(path: &Path) -> Result<Self> {
-        let content = std::fs::read_to_string(path)
-            .context("Failed to read config file")?;
+        let content = std::fs::read_to_string(path).context("Failed to read config file")?;
 
         // Expand environment variables
         let expanded = Self::expand_env_vars(&content);
 
-        let config: Config = toml::from_str(&expanded)
-            .context("Failed to parse config file")?;
+        let config: Config = toml::from_str(&expanded).context("Failed to parse config file")?;
 
         // Validate provider configuration exists
         match config.llm.provider {
@@ -97,6 +151,18 @@ impl Default for RustagentConfig {
         Self {
             spec_dir: "specs".to_string(),
             max_iterations: None,
+        }
+    }
+}
+
+impl Default for SecurityConfig {
+    fn default() -> Self {
+        Self {
+            shell_policy: default_shell_policy(),
+            allowed_commands: default_allowed_commands(),
+            blocked_patterns: vec![],
+            max_file_size_mb: default_max_file_size_mb(),
+            allowed_paths: default_allowed_paths(),
         }
     }
 }
@@ -157,18 +223,27 @@ mod tests {
         use tempfile::NamedTempFile;
 
         let mut file = NamedTempFile::new().unwrap();
-        writeln!(file, r#"
+        writeln!(
+            file,
+            r#"
 [llm]
 provider = "anthropic"
 model = "claude-3-5-sonnet-20241022"
 
 [rustagent]
 spec_dir = "specs"
-        "#).unwrap();
+        "#
+        )
+        .unwrap();
 
         let result = Config::load(file.path());
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Anthropic provider selected but [anthropic] config missing"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Anthropic provider selected but [anthropic] config missing")
+        );
     }
 
     #[test]
@@ -177,18 +252,27 @@ spec_dir = "specs"
         use tempfile::NamedTempFile;
 
         let mut file = NamedTempFile::new().unwrap();
-        writeln!(file, r#"
+        writeln!(
+            file,
+            r#"
 [llm]
 provider = "openai"
 model = "gpt-4"
 
 [rustagent]
 spec_dir = "specs"
-        "#).unwrap();
+        "#
+        )
+        .unwrap();
 
         let result = Config::load(file.path());
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("OpenAI provider selected but [openai] config missing"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("OpenAI provider selected but [openai] config missing")
+        );
     }
 
     #[test]
@@ -197,18 +281,27 @@ spec_dir = "specs"
         use tempfile::NamedTempFile;
 
         let mut file = NamedTempFile::new().unwrap();
-        writeln!(file, r#"
+        writeln!(
+            file,
+            r#"
 [llm]
 provider = "ollama"
 model = "llama2"
 
 [rustagent]
 spec_dir = "specs"
-        "#).unwrap();
+        "#
+        )
+        .unwrap();
 
         let result = Config::load(file.path());
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Ollama provider selected but [ollama] config missing"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Ollama provider selected but [ollama] config missing")
+        );
     }
 
     #[test]
@@ -221,7 +314,9 @@ spec_dir = "specs"
         }
 
         let mut file = NamedTempFile::new().unwrap();
-        writeln!(file, r#"
+        writeln!(
+            file,
+            r#"
 [llm]
 provider = "anthropic"
 model = "claude-3-5-sonnet-20241022"
@@ -231,7 +326,9 @@ api_key = "${{TEST_API_KEY}}"
 
 [rustagent]
 spec_dir = "specs"
-        "#).unwrap();
+        "#
+        )
+        .unwrap();
 
         let result = Config::load(file.path());
         assert!(result.is_ok());

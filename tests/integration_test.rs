@@ -1,4 +1,4 @@
-use rustagent::config::{Config, LlmProvider, LlmConfig, AnthropicConfig, RustagentConfig};
+use rustagent::config::{Config, LlmProvider, LlmConfig, AnthropicConfig, RustagentConfig, SecurityConfig};
 use rustagent::spec::{Spec, Task, TaskStatus};
 use tempfile::TempDir;
 use chrono::Utc;
@@ -22,6 +22,7 @@ fn test_full_workflow() {
             spec_dir: "specs".to_string(),
             max_iterations: Some(10),
         },
+        security: SecurityConfig::default(),
     };
 
     // Create spec
