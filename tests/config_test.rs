@@ -113,3 +113,66 @@ allowed_paths = [".", "/tmp"]
     assert_eq!(config.security.max_file_size_mb, 50);
     assert_eq!(config.security.allowed_paths.len(), 2);
 }
+
+#[test]
+fn test_per_mode_llm_config() {
+    let config_str = r#"
+[llm]
+provider = "anthropic"
+model = "claude-sonnet-4"
+max_tokens = 4096
+
+[planning.llm]
+provider = "anthropic"
+model = "claude-opus-4"
+max_tokens = 8192
+
+[ralph.llm]
+provider = "anthropic"
+model = "claude-sonnet-4"
+max_tokens = 4096
+
+[anthropic]
+api_key = "test-key"
+
+[rustagent]
+spec_dir = "specs"
+"#;
+
+    let config: Config = toml::from_str(config_str).unwrap();
+
+    // Planning should use opus
+    let planning_llm = config.planning_llm();
+    assert_eq!(planning_llm.model, "claude-opus-4");
+    assert_eq!(planning_llm.max_tokens, 8192);
+
+    // Ralph should use sonnet
+    let ralph_llm = config.ralph_llm();
+    assert_eq!(ralph_llm.model, "claude-sonnet-4");
+    assert_eq!(ralph_llm.max_tokens, 4096);
+}
+
+#[test]
+fn test_fallback_to_default_llm() {
+    let config_str = r#"
+[llm]
+provider = "anthropic"
+model = "claude-sonnet-4"
+max_tokens = 4096
+
+[anthropic]
+api_key = "test-key"
+
+[rustagent]
+spec_dir = "specs"
+"#;
+
+    let config: Config = toml::from_str(config_str).unwrap();
+
+    // Both should fall back to default
+    let planning_llm = config.planning_llm();
+    assert_eq!(planning_llm.model, "claude-sonnet-4");
+
+    let ralph_llm = config.ralph_llm();
+    assert_eq!(ralph_llm.model, "claude-sonnet-4");
+}

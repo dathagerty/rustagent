@@ -17,14 +17,21 @@ pub struct PlanningAgent {
 impl PlanningAgent {
     /// Create a new planning agent with the given config
     pub fn new(config: Config, spec_dir: String) -> Self {
+        // Get planning-specific LLM config
+        let llm_config = config.planning_llm().clone();
+
         // Create LLM client based on provider
-        let client: Box<dyn LlmClient> = match config.llm.provider {
+        let client: Box<dyn LlmClient> = match llm_config.provider {
             LlmProvider::Anthropic => {
                 let api_key = config
                     .anthropic
                     .expect("Anthropic config required for Anthropic provider")
                     .api_key;
-                Box::new(AnthropicClient::new(api_key))
+                Box::new(AnthropicClient::new(
+                    api_key,
+                    llm_config.model,
+                    llm_config.max_tokens,
+                ))
             }
             _ => panic!("Unsupported LLM provider"),
         };

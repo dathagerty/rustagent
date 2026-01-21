@@ -14,6 +14,12 @@ pub enum LlmProvider {
 pub struct LlmConfig {
     pub provider: LlmProvider,
     pub model: String,
+    #[serde(default = "default_max_tokens")]
+    pub max_tokens: u32,
+}
+
+fn default_max_tokens() -> u32 {
+    8192
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -35,6 +41,11 @@ pub struct OllamaConfig {
 pub struct RustagentConfig {
     pub spec_dir: String,
     pub max_iterations: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModeConfig {
+    pub llm: LlmConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -97,6 +108,8 @@ pub struct Config {
     pub anthropic: Option<AnthropicConfig>,
     pub openai: Option<OpenAiConfig>,
     pub ollama: Option<OllamaConfig>,
+    pub planning: Option<ModeConfig>,
+    pub ralph: Option<ModeConfig>,
     pub rustagent: RustagentConfig,
     #[serde(default)]
     pub security: SecurityConfig,
@@ -143,6 +156,20 @@ impl Config {
         }
 
         result
+    }
+
+    pub fn planning_llm(&self) -> &LlmConfig {
+        self.planning
+            .as_ref()
+            .map(|m| &m.llm)
+            .unwrap_or(&self.llm)
+    }
+
+    pub fn ralph_llm(&self) -> &LlmConfig {
+        self.ralph
+            .as_ref()
+            .map(|m| &m.llm)
+            .unwrap_or(&self.llm)
     }
 }
 

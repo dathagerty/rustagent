@@ -12,12 +12,15 @@ fn test_full_workflow() {
         llm: LlmConfig {
             provider: LlmProvider::Anthropic,
             model: "claude-sonnet-4-20250514".to_string(),
+            max_tokens: 8192,
         },
         anthropic: Some(AnthropicConfig {
             api_key: "test-key".to_string(),
         }),
         openai: None,
         ollama: None,
+        planning: None,
+        ralph: None,
         rustagent: RustagentConfig {
             spec_dir: "specs".to_string(),
             max_iterations: Some(10),

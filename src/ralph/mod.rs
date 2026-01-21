@@ -21,14 +21,21 @@ pub struct RalphLoop {
 
 impl RalphLoop {
     pub fn new(config: Config, spec_path: String, max_iterations: Option<usize>) -> Self {
+        // Get ralph-specific LLM config
+        let llm_config = config.ralph_llm().clone();
+
         // Create LLM client based on provider
-        let client: Arc<dyn LlmClient> = match config.llm.provider {
+        let client: Arc<dyn LlmClient> = match llm_config.provider {
             LlmProvider::Anthropic => {
                 let api_key = config
                     .anthropic
                     .expect("Anthropic config required")
                     .api_key;
-                Arc::new(AnthropicClient::new(api_key))
+                Arc::new(AnthropicClient::new(
+                    api_key,
+                    llm_config.model,
+                    llm_config.max_tokens,
+                ))
             }
             _ => panic!("Only Anthropic provider is currently supported"),
         };

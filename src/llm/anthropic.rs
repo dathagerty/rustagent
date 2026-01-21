@@ -8,6 +8,8 @@ const ANTHROPIC_VERSION: &str = "2023-06-01";
 
 pub struct AnthropicClient {
     api_key: String,
+    model: String,
+    max_tokens: u32,
     client: Client,
 }
 
@@ -53,9 +55,11 @@ enum ContentBlock {
 }
 
 impl AnthropicClient {
-    pub fn new(api_key: String) -> Self {
+    pub fn new(api_key: String, model: String, max_tokens: u32) -> Self {
         Self {
             api_key,
+            model,
+            max_tokens,
             client: Client::new(),
         }
     }
@@ -94,8 +98,8 @@ impl AnthropicClient {
         };
 
         let request = AnthropicRequest {
-            model: "claude-sonnet-4-20250514".to_string(),
-            max_tokens: 8192,
+            model: self.model.clone(),
+            max_tokens: self.max_tokens,
             messages: anthropic_messages,
             tools: anthropic_tools,
         };
@@ -106,7 +110,11 @@ impl AnthropicClient {
 
 #[async_trait]
 impl LlmClient for AnthropicClient {
-    async fn chat(&self, messages: Vec<Message>, tools: &[ToolDefinition]) -> Result<Response, Box<dyn std::error::Error>> {
+    async fn chat(
+        &self,
+        messages: Vec<Message>,
+        tools: &[ToolDefinition],
+    ) -> Result<Response, Box<dyn std::error::Error>> {
         let request_body = self.format_request(&messages, tools)?;
 
         let response = self
