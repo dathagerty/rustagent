@@ -39,9 +39,18 @@ impl RalphLoop {
 
         // Register tools
         let tools = ToolRegistry::new();
-        tools.register(Arc::new(ReadFileTool));
-        tools.register(Arc::new(WriteFileTool));
-        tools.register(Arc::new(ListFilesTool));
+        tools.register(Arc::new(ReadFileTool::new(
+            validator.clone(),
+            permission_handler.clone(),
+        )));
+        tools.register(Arc::new(WriteFileTool::new(
+            validator.clone(),
+            permission_handler.clone(),
+        )));
+        tools.register(Arc::new(ListFilesTool::new(
+            validator.clone(),
+            permission_handler.clone(),
+        )));
         tools.register(Arc::new(RunCommandTool::new(
             validator.clone(),
             permission_handler.clone(),

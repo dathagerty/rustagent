@@ -54,7 +54,17 @@ async fn test_read_file_tool() {
     let file_path = temp.path().join("test.txt");
     fs::write(&file_path, "hello world").unwrap();
 
-    let tool = ReadFileTool;
+    let config = rustagent::config::SecurityConfig {
+        shell_policy: rustagent::config::ShellPolicy::Allowlist,
+        allowed_commands: vec![],
+        blocked_patterns: vec![],
+        max_file_size_mb: 10,
+        allowed_paths: vec![temp.path().to_string_lossy().to_string()],
+    };
+    let validator = Arc::new(rustagent::security::SecurityValidator::new(config).unwrap());
+    let handler = Arc::new(rustagent::security::permission::AutoApproveHandler);
+
+    let tool = ReadFileTool::new(validator, handler);
     let result = tool
         .execute(json!({
             "path": file_path.to_str().unwrap()
@@ -70,7 +80,17 @@ async fn test_write_file_tool() {
     let temp = TempDir::new().unwrap();
     let file_path = temp.path().join("output.txt");
 
-    let tool = WriteFileTool;
+    let config = rustagent::config::SecurityConfig {
+        shell_policy: rustagent::config::ShellPolicy::Allowlist,
+        allowed_commands: vec![],
+        blocked_patterns: vec![],
+        max_file_size_mb: 10,
+        allowed_paths: vec![temp.path().to_string_lossy().to_string()],
+    };
+    let validator = Arc::new(rustagent::security::SecurityValidator::new(config).unwrap());
+    let handler = Arc::new(rustagent::security::permission::AutoApproveHandler);
+
+    let tool = WriteFileTool::new(validator, handler);
     tool.execute(json!({
         "path": file_path.to_str().unwrap(),
         "content": "test content"
@@ -88,7 +108,17 @@ async fn test_list_files_tool() {
     fs::write(temp.path().join("file1.txt"), "a").unwrap();
     fs::write(temp.path().join("file2.txt"), "b").unwrap();
 
-    let tool = ListFilesTool;
+    let config = rustagent::config::SecurityConfig {
+        shell_policy: rustagent::config::ShellPolicy::Allowlist,
+        allowed_commands: vec![],
+        blocked_patterns: vec![],
+        max_file_size_mb: 10,
+        allowed_paths: vec![temp.path().to_string_lossy().to_string()],
+    };
+    let validator = Arc::new(rustagent::security::SecurityValidator::new(config).unwrap());
+    let handler = Arc::new(rustagent::security::permission::AutoApproveHandler);
+
+    let tool = ListFilesTool::new(validator, handler);
     let result = tool
         .execute(json!({
             "path": temp.path().to_str().unwrap()
@@ -239,4 +269,56 @@ async fn test_run_command_blocked() {
 
     let result = tool.execute(params).await;
     assert!(result.is_ok()); // AutoApproveHandler allows it
+}
+
+#[tokio::test]
+async fn test_read_file_path_validation() {
+    let config = rustagent::config::SecurityConfig {
+        shell_policy: rustagent::config::ShellPolicy::Allowlist,
+        allowed_commands: vec![],
+        blocked_patterns: vec![],
+        max_file_size_mb: 10,
+        allowed_paths: vec![".".to_string()],
+    };
+
+    let validator = Arc::new(rustagent::security::SecurityValidator::new(config).unwrap());
+    let handler = Arc::new(rustagent::security::permission::AutoApproveHandler);
+
+    let tool = ReadFileTool::new(validator, handler);
+
+    // Path in current directory should work (after permission)
+    let params = serde_json::json!({
+        "path": "./Cargo.toml"
+    });
+
+    let result = tool.execute(params).await;
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn test_write_file_size_check() {
+    let dir = tempfile::tempdir().unwrap();
+
+    let config = rustagent::config::SecurityConfig {
+        shell_policy: rustagent::config::ShellPolicy::Allowlist,
+        allowed_commands: vec![],
+        blocked_patterns: vec![],
+        max_file_size_mb: 1, // Very small limit
+        allowed_paths: vec![dir.path().to_string_lossy().to_string()],
+    };
+
+    let validator = Arc::new(rustagent::security::SecurityValidator::new(config).unwrap());
+    let handler = Arc::new(rustagent::security::permission::AutoApproveHandler);
+
+    let tool = WriteFileTool::new(validator, handler);
+
+    // Small content should work
+    let path = dir.path().join("test.txt");
+    let params = serde_json::json!({
+        "path": path.to_string_lossy(),
+        "content": "hello"
+    });
+
+    let result = tool.execute(params).await;
+    assert!(result.is_ok());
 }

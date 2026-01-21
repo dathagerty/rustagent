@@ -35,9 +35,18 @@ impl PlanningAgent {
 
         // Create and populate tool registry
         let registry = ToolRegistry::new();
-        registry.register(Arc::new(ReadFileTool));
-        registry.register(Arc::new(WriteFileTool));
-        registry.register(Arc::new(ListFilesTool));
+        registry.register(Arc::new(ReadFileTool::new(
+            validator.clone(),
+            permission_handler.clone(),
+        )));
+        registry.register(Arc::new(WriteFileTool::new(
+            validator.clone(),
+            permission_handler.clone(),
+        )));
+        registry.register(Arc::new(ListFilesTool::new(
+            validator.clone(),
+            permission_handler.clone(),
+        )));
         registry.register(Arc::new(RunCommandTool::new(
             validator.clone(),
             permission_handler.clone(),
