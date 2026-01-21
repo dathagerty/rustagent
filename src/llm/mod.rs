@@ -104,3 +104,4 @@ pub trait LlmClient: Send + Sync {
 }
 
 pub mod anthropic;
+pub mod factory;

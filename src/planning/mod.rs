@@ -1,5 +1,5 @@
-use crate::config::{Config, LlmProvider};
-use crate::llm::anthropic::AnthropicClient;
+use crate::config::Config;
+use crate::llm::factory::create_client;
 use crate::llm::{LlmClient, Message, ResponseContent};
 use crate::security::{SecurityValidator, permission::CliPermissionHandler};
 use crate::tools::{
@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 /// Planning agent for interactive spec creation
 pub struct PlanningAgent {
-    client: Box<dyn LlmClient>,
+    client: Arc<dyn LlmClient>,
     registry: ToolRegistry,
     pub spec_dir: String,
     conversation: Vec<Message>,
@@ -24,26 +24,8 @@ impl PlanningAgent {
         // Get planning-specific LLM config
         let llm_config = config.planning_llm().clone();
 
-        // Create LLM client based on provider
-        let client: Box<dyn LlmClient> = match llm_config.provider {
-            LlmProvider::Anthropic => {
-                let anthropic_config = config.anthropic.as_ref().ok_or_else(|| {
-                    anyhow::anyhow!("Anthropic provider selected but [anthropic] config missing")
-                })?;
-
-                Box::new(AnthropicClient::new(
-                    anthropic_config.api_key.clone(),
-                    llm_config.model.clone(),
-                    llm_config.max_tokens,
-                ))
-            }
-            LlmProvider::OpenAi => {
-                anyhow::bail!("OpenAI provider not yet implemented")
-            }
-            LlmProvider::Ollama => {
-                anyhow::bail!("Ollama provider not yet implemented")
-            }
-        };
+        // Create LLM client using factory
+        let client = create_client(&config, &llm_config)?;
 
         // Create security validator and permission handler
         let validator = Arc::new(SecurityValidator::new(config.security.clone())?);
