@@ -82,4 +82,5 @@ impl Default for ToolRegistry {
 
 pub mod factory;
 pub mod file;
+pub mod permission_check;
 pub mod shell;

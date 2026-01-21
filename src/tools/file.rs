@@ -1,22 +1,19 @@
-use crate::security::permission::{
-    PermissionHandler, PermissionRequest, PermissionResult, ResourceType,
-};
+use crate::security::permission::PermissionHandler;
 use crate::security::{SecurityValidator, ValidationResult};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use serde_json::Value;
-use std::collections::HashSet;
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, RwLock};
+use std::path::Path;
+use std::sync::Arc;
 use tokio::fs;
 
+use super::permission_check::FilePermissionChecker;
 use super::Tool;
 
 /// Tool for reading file contents
 pub struct ReadFileTool {
+    checker: FilePermissionChecker,
     validator: Arc<SecurityValidator>,
-    permission_handler: Arc<dyn PermissionHandler>,
-    runtime_allowed: Arc<RwLock<HashSet<String>>>,
 }
 
 impl ReadFileTool {
@@ -25,49 +22,8 @@ impl ReadFileTool {
         permission_handler: Arc<dyn PermissionHandler>,
     ) -> Self {
         Self {
+            checker: FilePermissionChecker::new(validator.clone(), permission_handler),
             validator,
-            permission_handler,
-            runtime_allowed: Arc::new(RwLock::new(HashSet::new())),
-        }
-    }
-
-    fn check_permission(&self, path: &Path) -> Result<()> {
-        let path_str = path.to_string_lossy().to_string();
-
-        // Check runtime allowed
-        let is_allowed = {
-            let allowed = self.runtime_allowed.read().unwrap();
-            allowed.contains(&path_str)
-        };
-        if is_allowed {
-            return Ok(());
-        }
-
-        // Validate path
-        match self.validator.validate_file_path(path) {
-            ValidationResult::Allowed => Ok(()),
-            ValidationResult::Denied(reason) => {
-                anyhow::bail!("Path denied: {}", reason)
-            }
-            ValidationResult::RequiresPermission(reason) => {
-                let request = PermissionRequest {
-                    resource_type: ResourceType::FilePath,
-                    action: path_str.clone(),
-                    reason,
-                };
-
-                match self.permission_handler.request_permission(&request) {
-                    PermissionResult::Allow => Ok(()),
-                    PermissionResult::Deny => {
-                        anyhow::bail!("Permission denied by user")
-                    }
-                    PermissionResult::AllowAlways(p) => {
-                        let mut allowed = self.runtime_allowed.write().unwrap();
-                        allowed.insert(p);
-                        Ok(())
-                    }
-                }
-            }
         }
     }
 }
@@ -102,7 +58,7 @@ impl Tool for ReadFileTool {
         let path = Path::new(path);
 
         // Check permission
-        self.check_permission(path)?;
+        self.checker.check_permission(path)?;
 
         // Check file size
         match self.validator.check_file_size(path) {
@@ -125,9 +81,7 @@ impl Tool for ReadFileTool {
 
 /// Tool for writing content to a file
 pub struct WriteFileTool {
-    validator: Arc<SecurityValidator>,
-    permission_handler: Arc<dyn PermissionHandler>,
-    runtime_allowed: Arc<RwLock<HashSet<String>>>,
+    checker: FilePermissionChecker,
 }
 
 impl WriteFileTool {
@@ -136,49 +90,7 @@ impl WriteFileTool {
         permission_handler: Arc<dyn PermissionHandler>,
     ) -> Self {
         Self {
-            validator,
-            permission_handler,
-            runtime_allowed: Arc::new(RwLock::new(HashSet::new())),
-        }
-    }
-
-    fn check_permission(&self, path: &Path) -> Result<()> {
-        let path_str = path.to_string_lossy().to_string();
-
-        // Check runtime allowed
-        let is_allowed = {
-            let allowed = self.runtime_allowed.read().unwrap();
-            allowed.contains(&path_str)
-        };
-        if is_allowed {
-            return Ok(());
-        }
-
-        // Validate path
-        match self.validator.validate_file_path(path) {
-            ValidationResult::Allowed => Ok(()),
-            ValidationResult::Denied(reason) => {
-                anyhow::bail!("Path denied: {}", reason)
-            }
-            ValidationResult::RequiresPermission(reason) => {
-                let request = PermissionRequest {
-                    resource_type: ResourceType::FilePath,
-                    action: path_str.clone(),
-                    reason,
-                };
-
-                match self.permission_handler.request_permission(&request) {
-                    PermissionResult::Allow => Ok(()),
-                    PermissionResult::Deny => {
-                        anyhow::bail!("Permission denied by user")
-                    }
-                    PermissionResult::AllowAlways(p) => {
-                        let mut allowed = self.runtime_allowed.write().unwrap();
-                        allowed.insert(p);
-                        Ok(())
-                    }
-                }
-            }
+            checker: FilePermissionChecker::new(validator, permission_handler),
         }
     }
 }
@@ -220,7 +132,7 @@ impl Tool for WriteFileTool {
         let path = Path::new(path);
 
         // Check permission
-        self.check_permission(path)?;
+        self.checker.check_permission(path)?;
 
         // Create parent directories if they don't exist
         if let Some(parent) = path.parent() {
@@ -244,9 +156,7 @@ impl Tool for WriteFileTool {
 
 /// Tool for listing files in a directory
 pub struct ListFilesTool {
-    validator: Arc<SecurityValidator>,
-    permission_handler: Arc<dyn PermissionHandler>,
-    runtime_allowed: Arc<RwLock<HashSet<String>>>,
+    checker: FilePermissionChecker,
 }
 
 impl ListFilesTool {
@@ -255,49 +165,7 @@ impl ListFilesTool {
         permission_handler: Arc<dyn PermissionHandler>,
     ) -> Self {
         Self {
-            validator,
-            permission_handler,
-            runtime_allowed: Arc::new(RwLock::new(HashSet::new())),
-        }
-    }
-
-    fn check_permission(&self, path: &Path) -> Result<()> {
-        let path_str = path.to_string_lossy().to_string();
-
-        // Check runtime allowed
-        let is_allowed = {
-            let allowed = self.runtime_allowed.read().unwrap();
-            allowed.contains(&path_str)
-        };
-        if is_allowed {
-            return Ok(());
-        }
-
-        // Validate path
-        match self.validator.validate_file_path(path) {
-            ValidationResult::Allowed => Ok(()),
-            ValidationResult::Denied(reason) => {
-                anyhow::bail!("Path denied: {}", reason)
-            }
-            ValidationResult::RequiresPermission(reason) => {
-                let request = PermissionRequest {
-                    resource_type: ResourceType::FilePath,
-                    action: path_str.clone(),
-                    reason,
-                };
-
-                match self.permission_handler.request_permission(&request) {
-                    PermissionResult::Allow => Ok(()),
-                    PermissionResult::Deny => {
-                        anyhow::bail!("Permission denied by user")
-                    }
-                    PermissionResult::AllowAlways(p) => {
-                        let mut allowed = self.runtime_allowed.write().unwrap();
-                        allowed.insert(p);
-                        Ok(())
-                    }
-                }
-            }
+            checker: FilePermissionChecker::new(validator, permission_handler),
         }
     }
 }
@@ -332,7 +200,7 @@ impl Tool for ListFilesTool {
         let path = Path::new(path);
 
         // Check permission
-        self.check_permission(path)?;
+        self.checker.check_permission(path)?;
 
         let mut entries = fs::read_dir(path)
             .await
