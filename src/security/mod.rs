@@ -3,6 +3,8 @@ use anyhow::{anyhow, Result};
 use regex::Regex;
 use std::path::{Path, PathBuf};
 
+pub mod permission;
+
 pub struct SecurityValidator {
     config: SecurityConfig,
     blocked_regexes: Vec<Regex>,
