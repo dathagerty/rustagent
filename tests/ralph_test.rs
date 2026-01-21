@@ -34,7 +34,7 @@ spec_dir = "specs"
     spec.save(&spec_path).unwrap();
 
     let config = Config::load(&config_path).unwrap();
-    let ralph = RalphLoop::new(config, spec_path.to_str().unwrap().to_string(), None);
+    let ralph = RalphLoop::new(config, spec_path.to_str().unwrap().to_string(), None).unwrap();
 
     assert!(ralph.spec_path.ends_with("test.json"));
 }

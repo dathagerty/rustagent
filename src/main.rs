@@ -85,7 +85,7 @@ async fn main() -> anyhow::Result<()> {
                 .unwrap_or_else(|| config.rustagent.spec_dir.clone());
 
             // Create and run planning agent
-            let mut agent = planning::PlanningAgent::new(config, dir);
+            let mut agent = planning::PlanningAgent::new(config, dir)?;
             agent.run().await?;
         }
         Commands::Run { spec_file, max_iterations } => {
@@ -94,7 +94,7 @@ async fn main() -> anyhow::Result<()> {
             let config = config::Config::load(&config_path)?;
 
             // Create and run Ralph loop
-            let ralph = ralph::RalphLoop::new(config, spec_file.clone(), *max_iterations);
+            let ralph = ralph::RalphLoop::new(config, spec_file.clone(), *max_iterations)?;
             ralph.run().await?;
         }
     }

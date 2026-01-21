@@ -20,28 +20,35 @@ pub struct RalphLoop {
 }
 
 impl RalphLoop {
-    pub fn new(config: Config, spec_path: String, max_iterations: Option<usize>) -> Self {
+    pub fn new(config: Config, spec_path: String, max_iterations: Option<usize>) -> Result<Self> {
         // Get ralph-specific LLM config
         let llm_config = config.ralph_llm().clone();
 
         // Create LLM client based on provider
         let client: Arc<dyn LlmClient> = match llm_config.provider {
             LlmProvider::Anthropic => {
-                let api_key = config
-                    .anthropic
-                    .expect("Anthropic config required")
-                    .api_key;
+                let anthropic_config = config.anthropic
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!(
+                        "Anthropic provider selected but [anthropic] config missing"
+                    ))?;
+
                 Arc::new(AnthropicClient::new(
-                    api_key,
-                    llm_config.model,
+                    anthropic_config.api_key.clone(),
+                    llm_config.model.clone(),
                     llm_config.max_tokens,
                 ))
             }
-            _ => panic!("Only Anthropic provider is currently supported"),
+            LlmProvider::OpenAi => {
+                anyhow::bail!("OpenAI provider not yet implemented")
+            }
+            LlmProvider::Ollama => {
+                anyhow::bail!("Ollama provider not yet implemented")
+            }
         };
 
         // Create security validator and permission handler
-        let validator = Arc::new(SecurityValidator::new(config.security.clone()).expect("Failed to create security validator"));
+        let validator = Arc::new(SecurityValidator::new(config.security.clone())?);
         let permission_handler = Arc::new(CliPermissionHandler);
 
         // Register tools
@@ -67,12 +74,12 @@ impl RalphLoop {
             .or(config.rustagent.max_iterations)
             .unwrap_or(DEFAULT_MAX_ITERATIONS);
 
-        Self {
+        Ok(Self {
             client,
             tools,
             spec_path,
             max_iterations,
-        }
+        })
     }
 
     pub async fn run(&self) -> Result<()> {
@@ -110,7 +117,7 @@ impl RalphLoop {
             {
                 let task_mut = spec
                     .find_task_mut(&task.id)
-                    .expect("Task should exist");
+                    .context("Task not found in spec")?;
                 task_mut.status = TaskStatus::InProgress;
             }
             spec.save(&self.spec_path)
@@ -127,7 +134,7 @@ impl RalphLoop {
                             println!("Task completed successfully");
                             let task_mut = spec
                                 .find_task_mut(&task.id)
-                                .expect("Task should exist");
+                                .context("Task not found in spec")?;
                             task_mut.status = TaskStatus::Complete;
                             task_mut.completed_at = Some(Utc::now());
                             spec.save(&self.spec_path)?;
@@ -136,7 +143,7 @@ impl RalphLoop {
                             println!("Task is blocked");
                             let task_mut = spec
                                 .find_task_mut(&task.id)
-                                .expect("Task should exist");
+                                .context("Task not found in spec")?;
                             task_mut.status = TaskStatus::Blocked;
                             spec.save(&self.spec_path)?;
                         }
@@ -145,7 +152,7 @@ impl RalphLoop {
                             // Reset to pending to retry
                             let task_mut = spec
                                 .find_task_mut(&task.id)
-                                .expect("Task should exist");
+                                .context("Task not found in spec")?;
                             task_mut.status = TaskStatus::Pending;
                             spec.save(&self.spec_path)?;
                         }
@@ -157,7 +164,7 @@ impl RalphLoop {
                     let mut spec = Spec::load(&self.spec_path)?;
                     let task_mut = spec
                         .find_task_mut(&task.id)
-                        .expect("Task should exist");
+                        .context("Task not found in spec")?;
                     task_mut.status = TaskStatus::Pending;
                     spec.save(&self.spec_path)?;
                     break;

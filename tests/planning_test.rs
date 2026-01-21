@@ -21,7 +21,7 @@ spec_dir = "specs"
 "#).unwrap();
 
     let config = Config::load(&config_path).unwrap();
-    let agent = PlanningAgent::new(config, temp.path().to_str().unwrap().to_string());
+    let agent = PlanningAgent::new(config, temp.path().to_str().unwrap().to_string()).unwrap();
 
     assert!(agent.spec_dir.ends_with(temp.path().to_str().unwrap()));
 }

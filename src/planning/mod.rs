@@ -16,28 +16,35 @@ pub struct PlanningAgent {
 
 impl PlanningAgent {
     /// Create a new planning agent with the given config
-    pub fn new(config: Config, spec_dir: String) -> Self {
+    pub fn new(config: Config, spec_dir: String) -> anyhow::Result<Self> {
         // Get planning-specific LLM config
         let llm_config = config.planning_llm().clone();
 
         // Create LLM client based on provider
         let client: Box<dyn LlmClient> = match llm_config.provider {
             LlmProvider::Anthropic => {
-                let api_key = config
-                    .anthropic
-                    .expect("Anthropic config required for Anthropic provider")
-                    .api_key;
+                let anthropic_config = config.anthropic
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!(
+                        "Anthropic provider selected but [anthropic] config missing"
+                    ))?;
+
                 Box::new(AnthropicClient::new(
-                    api_key,
-                    llm_config.model,
+                    anthropic_config.api_key.clone(),
+                    llm_config.model.clone(),
                     llm_config.max_tokens,
                 ))
             }
-            _ => panic!("Unsupported LLM provider"),
+            LlmProvider::OpenAi => {
+                anyhow::bail!("OpenAI provider not yet implemented")
+            }
+            LlmProvider::Ollama => {
+                anyhow::bail!("Ollama provider not yet implemented")
+            }
         };
 
         // Create security validator and permission handler
-        let validator = Arc::new(SecurityValidator::new(config.security.clone()).expect("Failed to create security validator"));
+        let validator = Arc::new(SecurityValidator::new(config.security.clone())?);
         let permission_handler = Arc::new(CliPermissionHandler);
 
         // Create and populate tool registry
@@ -65,12 +72,12 @@ impl PlanningAgent {
             content: PLANNING_SYSTEM_PROMPT.to_string(),
         };
 
-        Self {
+        Ok(Self {
             client,
             registry,
             spec_dir,
             conversation: vec![system_message],
-        }
+        })
     }
 
     /// Run the interactive planning loop
