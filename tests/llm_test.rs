@@ -1,12 +1,9 @@
-use rustagent::llm::{Message, Role, ToolDefinition};
+use rustagent::llm::{Message, ToolDefinition};
 use serde_json::json;
 
 #[test]
 fn test_message_serialization() {
-    let msg = Message {
-        role: Role::User,
-        content: "Hello".to_string(),
-    };
+    let msg = Message::user("Hello");
 
     let json = serde_json::to_value(&msg).unwrap();
     assert_eq!(json["role"], "user");
@@ -37,10 +34,7 @@ async fn test_anthropic_message_format() {
     // This test validates request structure, doesn't actually call API
     let client = AnthropicClient::new("test-key".to_string(), "claude-sonnet-4".to_string(), 4096);
 
-    let messages = vec![Message {
-        role: Role::User,
-        content: "Hello".to_string(),
-    }];
+    let messages = vec![Message::user("Hello")];
 
     // We'll test this by mocking in future, for now just construct
     assert!(client.format_request(&messages, &[]).is_ok());
@@ -51,14 +45,8 @@ fn test_format_request_with_system_message() {
     let client = AnthropicClient::new("test-key".to_string(), "claude-sonnet-4".to_string(), 4096);
 
     let messages = vec![
-        Message {
-            role: Role::System,
-            content: "You are a helpful assistant".to_string(),
-        },
-        Message {
-            role: Role::User,
-            content: "Hello".to_string(),
-        },
+        Message::system("You are a helpful assistant"),
+        Message::user("Hello"),
     ];
 
     let request = client.format_request(&messages, &[]).unwrap();

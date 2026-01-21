@@ -78,15 +78,18 @@ impl AnthropicClient {
             .find(|m| m.role == Role::System)
             .map(|m| m.content.clone());
 
-        // Filter out system messages from messages array
+        // Filter out system messages and tool messages from messages array
+        // (Tool messages need special handling in Anthropic - for now we skip them
+        // and rely on the calling code to format tool results as user messages)
         let anthropic_messages: Vec<AnthropicMessage> = messages
             .iter()
-            .filter(|m| m.role != Role::System)
+            .filter(|m| m.role != Role::System && m.role != Role::Tool)
             .map(|m| AnthropicMessage {
                 role: match m.role {
                     Role::User => "user".to_string(),
                     Role::Assistant => "assistant".to_string(),
                     Role::System => unreachable!("System messages filtered out"),
+                    Role::Tool => unreachable!("Tool messages filtered out"),
                 },
                 content: m.content.clone(),
             })

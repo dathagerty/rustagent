@@ -1,6 +1,6 @@
 use crate::config::{Config, LlmProvider};
 use crate::llm::anthropic::AnthropicClient;
-use crate::llm::{LlmClient, Message, ResponseContent, Role};
+use crate::llm::{LlmClient, Message, ResponseContent};
 use crate::security::{SecurityValidator, permission::CliPermissionHandler};
 use crate::spec::{Spec, TaskStatus};
 use crate::tools::ToolRegistry;
@@ -178,10 +178,7 @@ impl RalphLoop {
         let context = self.build_context(task_id)?;
         let tool_definitions = self.tools.definitions();
 
-        let mut messages = vec![Message {
-            role: Role::User,
-            content: context,
-        }];
+        let mut messages = vec![Message::user(context)];
 
         // Agentic loop - continue until we get a completion signal
         let max_turns = 50;
@@ -207,10 +204,7 @@ impl RalphLoop {
                     }
 
                     // Add assistant response to conversation
-                    messages.push(Message {
-                        role: Role::Assistant,
-                        content: text,
-                    });
+                    messages.push(Message::assistant(text));
                 }
                 ResponseContent::ToolCalls(tool_calls) => {
                     println!("  Executing {} tool calls", tool_calls.len());
@@ -234,11 +228,10 @@ impl RalphLoop {
                     }
 
                     // Add tool results as user message
+                    // Note: Using User role for now as Anthropic expects tool results
+                    // in user messages. Future OpenAI provider will use Message::tool_result()
                     let results_text = results.join("\n\n");
-                    messages.push(Message {
-                        role: Role::User,
-                        content: results_text,
-                    });
+                    messages.push(Message::user(results_text));
                 }
             }
         }

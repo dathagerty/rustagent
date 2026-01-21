@@ -1,6 +1,6 @@
 use crate::config::{Config, LlmProvider};
 use crate::llm::anthropic::AnthropicClient;
-use crate::llm::{LlmClient, Message, ResponseContent, Role};
+use crate::llm::{LlmClient, Message, ResponseContent};
 use crate::security::{SecurityValidator, permission::CliPermissionHandler};
 use crate::tools::{
     ToolRegistry,
@@ -69,10 +69,7 @@ impl PlanningAgent {
         )));
 
         // Initialize conversation with system message
-        let system_message = Message {
-            role: Role::System,
-            content: PLANNING_SYSTEM_PROMPT.to_string(),
-        };
+        let system_message = Message::system(PLANNING_SYSTEM_PROMPT);
 
         Ok(Self {
             client,
@@ -112,10 +109,7 @@ impl PlanningAgent {
             }
 
             // Add user message to conversation
-            self.conversation.push(Message {
-                role: Role::User,
-                content: input.to_string(),
-            });
+            self.conversation.push(Message::user(input));
 
             // Process the conversation turn
             match self.process_turn().await {
@@ -151,10 +145,7 @@ impl PlanningAgent {
             match response.content {
                 ResponseContent::Text(text) => {
                     // Add assistant response to conversation
-                    self.conversation.push(Message {
-                        role: Role::Assistant,
-                        content: text.clone(),
-                    });
+                    self.conversation.push(Message::assistant(text.clone()));
 
                     // Print assistant response
                     println!("\nAssistant: {}\n", text);
@@ -192,10 +183,12 @@ impl PlanningAgent {
                         };
 
                         // Add tool result to conversation
-                        self.conversation.push(Message {
-                            role: Role::User,
-                            content: format!("Tool result for {}:\n{}", tool_call.name, output),
-                        });
+                        // Note: Using User role for now as Anthropic expects tool results
+                        // in user messages. Future OpenAI provider will use Message::tool_result()
+                        self.conversation.push(Message::user(format!(
+                            "Tool result for {}:\n{}",
+                            tool_call.name, output
+                        )));
                     }
 
                     // Continue the loop to get the next LLM response
