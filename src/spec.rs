@@ -45,6 +45,13 @@ impl Spec {
 
     /// Save the spec to a JSON file
     pub fn save(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
+        let path = path.as_ref();
+
+        // Create parent directories if they don't exist
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+
         let json = serde_json::to_string_pretty(self)?;
         fs::write(path, json)?;
         Ok(())

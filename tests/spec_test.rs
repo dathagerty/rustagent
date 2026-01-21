@@ -81,3 +81,30 @@ fn test_task_completion_timestamp() {
     // Chrono serializes with 'Z' suffix, which is valid RFC3339
     assert!(json.contains(&format!("{}Z", completed.format("%Y-%m-%dT%H:%M:%S%.f"))));
 }
+
+#[test]
+fn test_spec_save_creates_parent_directories() {
+    let dir = tempfile::tempdir().unwrap();
+    let nested_path = dir.path()
+        .join("level1")
+        .join("level2")
+        .join("level3")
+        .join("spec.json");
+
+    let spec = Spec {
+        name: "test".to_string(),
+        description: "test spec".to_string(),
+        branch_name: "feature/test".to_string(),
+        created_at: Utc::now(),
+        tasks: vec![],
+        learnings: vec![],
+    };
+
+    // Should create all parent directories
+    spec.save(&nested_path).unwrap();
+    assert!(nested_path.exists());
+
+    // Should be able to load it back
+    let loaded = Spec::load(&nested_path).unwrap();
+    assert_eq!(loaded.name, "test");
+}
