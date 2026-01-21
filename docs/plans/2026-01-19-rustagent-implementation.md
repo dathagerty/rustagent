@@ -6,40 +6,7 @@
 
 **Architecture:** Trait-based LLM abstraction supporting multiple providers (Anthropic, OpenAI, Ollama), modular tool system, JSON-based spec persistence, and Ralph Loop algorithm with fresh context per iteration.
 
-**Tech Stack:** Rust (2021 edition), tokio async runtime, clap CLI, reqwest HTTP, serde JSON, anyhow error handling, toml config parsing
-
----
-
-## Pre-Implementation: Fix Edition
-
-### Task 0: Fix Cargo.toml Edition
-
-**Files:**
-- Modify: `Cargo.toml:4`
-
-**Step 1: Update edition from 2024 to 2021**
-
-Change line 4 in `Cargo.toml` from:
-```toml
-edition = "2024"
-```
-
-To:
-```toml
-edition = "2021"
-```
-
-**Step 2: Verify the fix**
-
-Run: `cargo check`
-Expected: Compilation succeeds without edition warning
-
-**Step 3: Commit**
-
-```bash
-git add Cargo.toml
-git commit -m "fix: correct Rust edition from 2024 to 2021"
-```
+**Tech Stack:** Rust (2024 edition), tokio async runtime, clap CLI, reqwest HTTP, serde JSON, anyhow error handling, toml config parsing
 
 ---
 
