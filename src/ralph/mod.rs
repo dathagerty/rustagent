@@ -182,7 +182,7 @@ impl RalphLoop {
             spec.save(&self.spec_path).context("Failed to save spec")?;
 
             match self.execute_task_with_sender(&task.id, &tx).await {
-                Ok(signal) => {
+                Ok((signal, reason)) => {
                     let mut spec = Spec::load(&self.spec_path)?;
 
                     match signal.as_str() {
@@ -203,7 +203,7 @@ impl RalphLoop {
                             spec.save(&self.spec_path)?;
                             tx.send(AgentMessage::TaskBlocked {
                                 task_id: task.id,
-                                reason: "Task reported blocked".to_string(),
+                                reason: reason.unwrap_or_else(|| "Task reported blocked".to_string()),
                             }).await?;
                         }
                         _ => {
@@ -212,6 +212,9 @@ impl RalphLoop {
                                 .context("Task not found")?;
                             task_mut.status = TaskStatus::Pending;
                             spec.save(&self.spec_path)?;
+                            tx.send(AgentMessage::TaskResponse(
+                                format!("Unknown signal '{}', resetting task to pending", signal)
+                            )).await?;
                         }
                     }
                 }
@@ -229,7 +232,7 @@ impl RalphLoop {
         &self,
         task_id: &str,
         tx: &AgentSender,
-    ) -> Result<String> {
+    ) -> Result<(String, Option<String>)> {
         let context = self.build_context(task_id)?;
         let tool_definitions = self.tools.definitions();
 
@@ -247,10 +250,10 @@ impl RalphLoop {
                     tx.send(AgentMessage::TaskResponse(text.clone())).await?;
 
                     if text.contains("TASK_COMPLETE") {
-                        return Ok("TASK_COMPLETE".to_string());
+                        return Ok(("TASK_COMPLETE".to_string(), None));
                     }
                     if text.contains("TASK_BLOCKED") {
-                        return Ok("TASK_BLOCKED".to_string());
+                        return Ok(("TASK_BLOCKED".to_string(), Some(text)));
                     }
 
                     messages.push(Message::assistant(text));
@@ -265,9 +268,11 @@ impl RalphLoop {
                             let result = tool.execute(tool_call.parameters.clone()).await?;
 
                             if result.starts_with("SIGNAL:complete:") {
-                                return Ok("TASK_COMPLETE".to_string());
+                                return Ok(("TASK_COMPLETE".to_string(), None));
                             } else if result.starts_with("SIGNAL:blocked:") {
-                                return Ok("TASK_BLOCKED".to_string());
+                                let reason = result.strip_prefix("SIGNAL:blocked:")
+                                    .map(|s| s.to_string());
+                                return Ok(("TASK_BLOCKED".to_string(), reason));
                             }
                         }
                     }

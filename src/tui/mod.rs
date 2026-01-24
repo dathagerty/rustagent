@@ -47,15 +47,17 @@ pub async fn run(
     agent_rx: &mut Receiver<AgentMessage>,
 ) -> anyhow::Result<()> {
     let original_hook = panic::take_hook();
-    panic::set_hook(Box::new(move |info| {
+    panic::set_hook(Box::new(|info| {
         let _ = disable_raw_mode();
         let _ = execute!(io::stdout(), LeaveAlternateScreen);
-        original_hook(info);
+        eprintln!("Panic: {}", info);
     }));
 
     let result = run_loop(terminal, app, agent_rx).await;
 
+    // Restore original panic hook
     let _ = panic::take_hook();
+    panic::set_hook(original_hook);
 
     result
 }

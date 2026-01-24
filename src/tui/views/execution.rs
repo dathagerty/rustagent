@@ -71,24 +71,28 @@ impl Default for ExecutionState {
     }
 }
 
-pub fn draw_execution(frame: &mut Frame, area: Rect, state: &ExecutionState) {
+pub fn draw_execution(frame: &mut Frame, area: Rect, state: &ExecutionState, spinner_char: char) {
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(35), Constraint::Percentage(65)])
         .split(area);
 
-    draw_task_pane(frame, chunks[0], state);
+    draw_task_pane(frame, chunks[0], state, spinner_char);
     draw_output_pane(frame, chunks[1], state);
 }
 
-fn draw_task_pane(frame: &mut Frame, area: Rect, state: &ExecutionState) {
+fn draw_task_pane(frame: &mut Frame, area: Rect, state: &ExecutionState, spinner_char: char) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Length(8), Constraint::Min(0)])
         .split(area);
 
     let (completed, total) = state.task_progress();
-    let title = format!(" Current Task {}/{} ", completed, total);
+    let title = if state.running {
+        format!(" Current Task {}/{} {} ", completed, total, spinner_char)
+    } else {
+        format!(" Current Task {}/{} ", completed, total)
+    };
     let current_block = Block::default().borders(Borders::ALL).title(title);
 
     let current_content = if let Some(task) = &state.current_task {

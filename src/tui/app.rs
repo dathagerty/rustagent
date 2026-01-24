@@ -27,6 +27,8 @@ pub struct App {
     pub config: Option<Config>,
     pub spinner: Spinner,
     pub help: HelpOverlay,
+    pub planning_active: bool,
+    pub execution_active: bool,
 }
 
 impl App {
@@ -46,11 +48,21 @@ impl App {
             config,
             spinner: Spinner::new(),
             help: HelpOverlay::new(),
+            planning_active: false,
+            execution_active: false,
         }
     }
 
     /// Handle key events. Uses full KeyEvent to preserve modifiers.
     pub fn handle_key(&mut self, key: KeyEvent) {
+        // Help overlay is modal - only Esc closes it
+        if self.help.visible {
+            if key.code == KeyCode::Esc {
+                self.help.visible = false;
+            }
+            return;
+        }
+
         // Handle planning insert mode separately
         if self.active_tab == ActiveTab::Planning && self.planning.insert_mode {
             match key.code {
@@ -61,8 +73,14 @@ impl App {
                     if let Some(text) = self.planning.submit_input() {
                         self.planning.add_message(MessageRole::User, text.clone());
 
+                        // Don't spawn if already running
+                        if self.planning.thinking {
+                            return;
+                        }
+
                         // Spawn planning agent if we have config
                         if let Some(ref config) = self.config {
+                            self.planning.thinking = true;
                             let tx = self.agent_tx.clone();
                             let spec_dir = self.spec_dir.clone();
                             let config = config.clone();
@@ -129,6 +147,11 @@ impl App {
                 self.dashboard.move_selection(NavDirection::Right);
             }
             (KeyCode::Enter, KeyModifiers::NONE) if self.active_tab == ActiveTab::Dashboard => {
+                // Don't spawn if execution already running
+                if self.execution.running {
+                    return;
+                }
+
                 if let Some(spec) = self.dashboard.selected_spec() {
                     let spec_path = spec.path.clone();
 
@@ -164,9 +187,7 @@ impl App {
                 self.help.toggle();
             }
             (KeyCode::Esc, _) => {
-                if self.help.visible {
-                    self.help.visible = false;
-                } else if self.side_panel.visible {
+                if self.side_panel.visible {
                     self.side_panel.visible = false;
                 }
             }
@@ -184,11 +205,22 @@ impl App {
                 self.planning.thinking = false;
                 self.planning.add_message(MessageRole::Assistant, text);
             }
-            AgentMessage::PlanningToolCall { name: _, args: _ } => {
-                // Tool calls happen in background, keep thinking
+            AgentMessage::PlanningToolCall { name, args: _ } => {
+                self.planning.add_message(
+                    MessageRole::Assistant,
+                    format!("[Calling tool: {}]", name),
+                );
             }
-            AgentMessage::PlanningToolResult { name: _, output: _ } => {
-                // Results flow into next response
+            AgentMessage::PlanningToolResult { name, output } => {
+                let preview = if output.len() > 100 {
+                    format!("{}...", &output[..100])
+                } else {
+                    output
+                };
+                self.planning.add_message(
+                    MessageRole::Assistant,
+                    format!("[{} result: {}]", name, preview),
+                );
             }
             AgentMessage::PlanningComplete { spec_path } => {
                 self.planning.thinking = false;

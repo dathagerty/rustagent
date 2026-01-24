@@ -101,6 +101,18 @@ impl DashboardState {
                 }
             }
         }
+
+        // Clamp selection to valid range after reload
+        self.clamp_selection();
+    }
+
+    fn clamp_selection(&mut self) {
+        let count = self.specs_in_current_column().len();
+        if count == 0 {
+            self.selected_row = 0;
+        } else {
+            self.selected_row = self.selected_row.min(count - 1);
+        }
     }
 
     pub fn selected_spec(&self) -> Option<&SpecSummary> {
