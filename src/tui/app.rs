@@ -1,5 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
+use crate::config::Config;
 use crate::tui::messages::{AgentMessage, AgentSender};
 use crate::tui::views::{
     DashboardMode, DashboardState, ExecutionState, MessageRole, OutputItem, PlanningState, ToolCall,
@@ -22,10 +23,11 @@ pub struct App {
     pub side_panel: SidePanel,
     pub spec_dir: String,
     pub agent_tx: AgentSender,
+    pub config: Option<Config>,
 }
 
 impl App {
-    pub fn new(spec_dir: &str, agent_tx: AgentSender) -> Self {
+    pub fn new(spec_dir: &str, agent_tx: AgentSender, config: Option<Config>) -> Self {
         let mut dashboard = DashboardState::new();
         dashboard.load_specs(spec_dir);
 
@@ -38,6 +40,7 @@ impl App {
             side_panel: SidePanel::new(),
             spec_dir: spec_dir.to_string(),
             agent_tx,
+            config,
         }
     }
 
@@ -51,7 +54,27 @@ impl App {
                 }
                 KeyCode::Enter => {
                     if let Some(text) = self.planning.submit_input() {
-                        self.planning.add_message(MessageRole::User, text);
+                        self.planning.add_message(MessageRole::User, text.clone());
+
+                        // Spawn planning agent if we have config
+                        if let Some(ref config) = self.config {
+                            let tx = self.agent_tx.clone();
+                            let spec_dir = self.spec_dir.clone();
+                            let config = config.clone();
+
+                            tokio::spawn(async move {
+                                match crate::planning::PlanningAgent::new(config, spec_dir) {
+                                    Ok(mut agent) => {
+                                        if let Err(e) = agent.run_with_sender(tx.clone(), text).await {
+                                            let _ = tx.send(AgentMessage::PlanningError(e.to_string())).await;
+                                        }
+                                    }
+                                    Err(e) => {
+                                        let _ = tx.send(AgentMessage::PlanningError(e.to_string())).await;
+                                    }
+                                }
+                            });
+                        }
                     }
                 }
                 _ => {
@@ -192,6 +215,6 @@ impl App {
 impl Default for App {
     fn default() -> Self {
         let (tx, _) = crate::tui::messages::agent_channel();
-        Self::new("", tx)
+        Self::new("", tx, None)
     }
 }

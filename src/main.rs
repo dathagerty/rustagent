@@ -138,7 +138,7 @@ async fn main() -> anyhow::Result<()> {
 
             let mut terminal = tui::setup_terminal()?;
             let (tx, mut rx) = agent_channel();
-            let mut app = tui::App::new(&spec_dir, tx);
+            let mut app = tui::App::new(&spec_dir, tx, Some(config));
 
             let result = tui::run(&mut terminal, &mut app, &mut rx).await;
 

@@ -4,6 +4,7 @@ use crate::llm::{LlmClient, Message, ResponseContent};
 use crate::security::{SecurityValidator, permission::CliPermissionHandler};
 use crate::tools::ToolRegistry;
 use crate::tools::factory::create_default_registry;
+use crate::tui::messages::{AgentMessage, AgentSender};
 use std::io::{self, Write};
 use std::sync::Arc;
 
@@ -90,6 +91,77 @@ impl PlanningAgent {
         }
 
         Ok(())
+    }
+
+    /// Run planning with a message sender for TUI integration
+    pub async fn run_with_sender(
+        &mut self,
+        tx: AgentSender,
+        initial_message: String,
+    ) -> anyhow::Result<()> {
+        tx.send(AgentMessage::PlanningStarted).await?;
+
+        self.conversation.push(Message::user(&initial_message));
+
+        loop {
+            let tools = self.registry.definitions();
+            let response = self.client.chat(self.conversation.clone(), &tools).await?;
+
+            match response.content {
+                ResponseContent::Text(text) => {
+                    self.conversation.push(Message::assistant(text.clone()));
+                    tx.send(AgentMessage::PlanningResponse(text)).await?;
+
+                    // Check for end of turn
+                    if matches!(response.stop_reason.as_deref(), Some("end_turn")) {
+                        break;
+                    }
+                    break;
+                }
+                ResponseContent::ToolCalls(tool_calls) => {
+                    for tool_call in &tool_calls {
+                        tx.send(AgentMessage::PlanningToolCall {
+                            name: tool_call.name.clone(),
+                            args: tool_call.parameters.to_string(),
+                        }).await?;
+
+                        let tool = self
+                            .registry
+                            .get(&tool_call.name)
+                            .ok_or_else(|| anyhow::anyhow!("Tool not found: {}", tool_call.name))?;
+
+                        let result = tool.execute(tool_call.parameters.clone()).await;
+
+                        let output = match result {
+                            Ok(output) => output,
+                            Err(e) => format!("Error: {}", e),
+                        };
+
+                        tx.send(AgentMessage::PlanningToolResult {
+                            name: tool_call.name.clone(),
+                            output: output.clone(),
+                        }).await?;
+
+                        self.conversation.push(Message::user(format!(
+                            "Tool result for {}:\n{}",
+                            tool_call.name, output
+                        )));
+                    }
+                    // Continue loop for next LLM response
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Continue conversation with additional user input
+    pub async fn continue_with_sender(
+        &mut self,
+        tx: AgentSender,
+        user_message: String,
+    ) -> anyhow::Result<()> {
+        self.run_with_sender(tx, user_message).await
     }
 
     /// Process a single conversation turn
