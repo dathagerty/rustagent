@@ -8,7 +8,7 @@ use std::path::PathBuf;
 #[command(about = "A Rust-based AI agent for task execution", long_about = None)]
 struct Cli {
     #[command(subcommand)]
-    command: Commands,
+    command: Option<Commands>,
 }
 
 #[derive(Subcommand)]
@@ -33,6 +33,8 @@ enum Commands {
         #[arg(long)]
         max_iterations: Option<usize>,
     },
+    /// Launch interactive TUI
+    Tui,
 }
 
 /// Find config file in standard locations
@@ -70,7 +72,10 @@ async fn main() -> anyhow::Result<()> {
 
     let cli = Cli::parse();
 
-    match &cli.command {
+    // Default to TUI if no command specified
+    let command = cli.command.unwrap_or(Commands::Tui);
+
+    match command {
         Commands::Init { spec_dir } => {
             let dir = spec_dir.clone().unwrap_or_else(|| "specs".to_string());
 
@@ -121,8 +126,24 @@ async fn main() -> anyhow::Result<()> {
             let config = config::Config::load(&config_path)?;
 
             // Create and run Ralph loop
-            let ralph = ralph::RalphLoop::new(config, spec_file.clone(), *max_iterations)?;
+            let ralph = ralph::RalphLoop::new(config, spec_file.clone(), max_iterations)?;
             ralph.run().await?;
+        }
+        Commands::Tui => {
+            let config_path = find_config_path()?;
+            let config = config::Config::load(&config_path)?;
+            let spec_dir = config.rustagent.spec_dir.clone();
+
+            use rustagent::tui;
+
+            let mut terminal = tui::setup_terminal()?;
+            let mut app = tui::App::new(&spec_dir);
+
+            let result = tui::run(&mut terminal, &mut app);
+
+            tui::restore_terminal(&mut terminal)?;
+
+            result?;
         }
     }
 

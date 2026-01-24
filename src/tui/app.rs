@@ -20,11 +20,14 @@ pub struct App {
 }
 
 impl App {
-    pub fn new() -> Self {
+    pub fn new(spec_dir: &str) -> Self {
+        let mut dashboard = DashboardState::new();
+        dashboard.load_specs(spec_dir);
+
         Self {
             running: true,
             active_tab: ActiveTab::Dashboard,
-            dashboard: DashboardState::new(),
+            dashboard,
             planning: PlanningState::new(),
             execution: ExecutionState::new(),
             side_panel: SidePanel::new(),
@@ -88,6 +91,6 @@ impl App {
 
 impl Default for App {
     fn default() -> Self {
-        Self::new()
+        Self::new("")
     }
 }

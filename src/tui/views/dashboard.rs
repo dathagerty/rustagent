@@ -1,9 +1,14 @@
+use std::fs;
+use std::path::Path;
+
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, Paragraph},
 };
+
+use crate::spec::Spec;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DashboardMode {
@@ -40,6 +45,59 @@ impl DashboardState {
             specs: Vec::new(),
             selected_column: 0,
             selected_row: 0,
+        }
+    }
+
+    pub fn load_specs(&mut self, spec_dir: &str) {
+        self.specs.clear();
+
+        let spec_path = Path::new(spec_dir);
+        if !spec_path.exists() {
+            return;
+        }
+
+        if let Ok(entries) = fs::read_dir(spec_path) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+
+                // Look for spec.json files
+                let spec_file = if path.is_dir() {
+                    path.join("spec.json")
+                } else if path.extension().is_some_and(|e| e == "json") {
+                    path
+                } else {
+                    continue;
+                };
+
+                if let Ok(spec) = Spec::load(&spec_file) {
+                    let completed = spec
+                        .tasks
+                        .iter()
+                        .filter(|t| t.status == crate::spec::TaskStatus::Complete)
+                        .count();
+                    let total = spec.tasks.len();
+
+                    let status = if completed == total && total > 0 {
+                        SpecStatus::Completed
+                    } else if spec
+                        .tasks
+                        .iter()
+                        .any(|t| t.status == crate::spec::TaskStatus::InProgress)
+                    {
+                        SpecStatus::Running
+                    } else if total > 0 {
+                        SpecStatus::Ready
+                    } else {
+                        SpecStatus::Draft
+                    };
+
+                    self.specs.push(SpecSummary {
+                        name: spec.name,
+                        status,
+                        task_progress: (completed, total),
+                    });
+                }
+            }
         }
     }
 }
