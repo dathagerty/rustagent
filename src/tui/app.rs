@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::tui::views::{DashboardState, DashboardMode, PlanningState, MessageRole};
+use crate::tui::views::{DashboardState, DashboardMode, ExecutionState, PlanningState, MessageRole};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActiveTab {
@@ -14,6 +14,7 @@ pub struct App {
     pub active_tab: ActiveTab,
     pub dashboard: DashboardState,
     pub planning: PlanningState,
+    pub execution: ExecutionState,
 }
 
 impl App {
@@ -23,6 +24,7 @@ impl App {
             active_tab: ActiveTab::Dashboard,
             dashboard: DashboardState::new(),
             planning: PlanningState::new(),
+            execution: ExecutionState::new(),
         }
     }
 

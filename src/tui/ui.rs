@@ -2,12 +2,12 @@ use ratatui::{
     layout::{Constraint, Direction, Layout},
     style::{Color, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
+    widgets::Paragraph,
     Frame,
 };
 
 use crate::tui::{App, ActiveTab};
-use crate::tui::views::{draw_dashboard, draw_planning};
+use crate::tui::views::{draw_dashboard, draw_execution, draw_planning};
 use crate::tui::widgets::TabBar;
 
 pub fn draw(frame: &mut Frame, app: &mut App) {
@@ -32,14 +32,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
             draw_planning(frame, chunks[1], &mut app.planning);
         }
         ActiveTab::Execution => {
-            let content_block = Block::default()
-                .borders(Borders::ALL)
-                .title(" Execution ");
-
-            let placeholder = Paragraph::new("Execution view - coming soon")
-                .block(content_block);
-
-            frame.render_widget(placeholder, chunks[1]);
+            draw_execution(frame, chunks[1], &app.execution);
         }
     }
 
