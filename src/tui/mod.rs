@@ -1,13 +1,17 @@
 mod app;
+pub mod messages;
 mod ui;
 pub mod views;
 pub mod widgets;
+
+pub use messages::{agent_channel, AgentMessage, AgentReceiver, AgentSender};
 
 pub use app::{App, ActiveTab};
 pub use ui::draw;
 
 use std::io;
 use std::panic;
+use std::time::Duration;
 use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
@@ -17,6 +21,7 @@ use ratatui::{
     backend::CrosstermBackend,
     Terminal,
 };
+use tokio::sync::mpsc::Receiver;
 
 pub type Tui = Terminal<CrosstermBackend<io::Stdout>>;
 
@@ -36,9 +41,11 @@ pub fn restore_terminal(terminal: &mut Tui) -> io::Result<()> {
 }
 
 /// Run the TUI event loop with panic safety.
-/// Terminal is always restored even on panic or error.
-pub fn run(terminal: &mut Tui, app: &mut App) -> anyhow::Result<()> {
-    // Set panic hook to restore terminal
+pub async fn run(
+    terminal: &mut Tui,
+    app: &mut App,
+    agent_rx: &mut Receiver<AgentMessage>,
+) -> anyhow::Result<()> {
     let original_hook = panic::take_hook();
     panic::set_hook(Box::new(move |info| {
         let _ = disable_raw_mode();
@@ -46,27 +53,44 @@ pub fn run(terminal: &mut Tui, app: &mut App) -> anyhow::Result<()> {
         original_hook(info);
     }));
 
-    let result = run_loop(terminal, app);
+    let result = run_loop(terminal, app, agent_rx).await;
 
-    // Restore original panic hook
     let _ = panic::take_hook();
 
     result
 }
 
-fn run_loop(terminal: &mut Tui, app: &mut App) -> anyhow::Result<()> {
-    while app.running {
+async fn run_loop(
+    terminal: &mut Tui,
+    app: &mut App,
+    agent_rx: &mut Receiver<AgentMessage>,
+) -> anyhow::Result<()> {
+    let mut interval = tokio::time::interval(Duration::from_millis(50));
+
+    loop {
+        if !app.running {
+            break;
+        }
+
         terminal.draw(|frame| crate::tui::ui::draw(frame, app))?;
 
-        if event::poll(std::time::Duration::from_millis(100))? {
-            match event::read()? {
-                Event::Key(key) if key.kind == KeyEventKind::Press => {
-                    app.handle_key(key);
+        tokio::select! {
+            _ = interval.tick() => {
+                while event::poll(Duration::ZERO)? {
+                    match event::read()? {
+                        Event::Key(key) if key.kind == KeyEventKind::Press => {
+                            app.handle_key(key);
+                        }
+                        Event::Resize(_, _) => {
+                            // Redraw handled next iteration
+                        }
+                        _ => {}
+                    }
                 }
-                Event::Resize(_, _) => {
-                    // Terminal will redraw on next iteration
-                }
-                _ => {}
+            }
+
+            Some(msg) = agent_rx.recv() => {
+                app.handle_agent_message(msg);
             }
         }
     }

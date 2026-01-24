@@ -134,12 +134,13 @@ async fn main() -> anyhow::Result<()> {
             let config = config::Config::load(&config_path)?;
             let spec_dir = config.rustagent.spec_dir.clone();
 
-            use rustagent::tui;
+            use rustagent::tui::{self, agent_channel};
 
             let mut terminal = tui::setup_terminal()?;
-            let mut app = tui::App::new(&spec_dir);
+            let (tx, mut rx) = agent_channel();
+            let mut app = tui::App::new(&spec_dir, tx);
 
-            let result = tui::run(&mut terminal, &mut app);
+            let result = tui::run(&mut terminal, &mut app, &mut rx).await;
 
             tui::restore_terminal(&mut terminal)?;
 

@@ -1,6 +1,9 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::tui::views::{DashboardMode, DashboardState, ExecutionState, MessageRole, PlanningState};
+use crate::tui::messages::{AgentMessage, AgentSender};
+use crate::tui::views::{
+    DashboardMode, DashboardState, ExecutionState, MessageRole, OutputItem, PlanningState, ToolCall,
+};
 use crate::tui::widgets::SidePanel;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -17,10 +20,12 @@ pub struct App {
     pub planning: PlanningState,
     pub execution: ExecutionState,
     pub side_panel: SidePanel,
+    pub spec_dir: String,
+    pub agent_tx: AgentSender,
 }
 
 impl App {
-    pub fn new(spec_dir: &str) -> Self {
+    pub fn new(spec_dir: &str, agent_tx: AgentSender) -> Self {
         let mut dashboard = DashboardState::new();
         dashboard.load_specs(spec_dir);
 
@@ -31,6 +36,8 @@ impl App {
             planning: PlanningState::new(),
             execution: ExecutionState::new(),
             side_panel: SidePanel::new(),
+            spec_dir: spec_dir.to_string(),
+            agent_tx,
         }
     }
 
@@ -87,10 +94,104 @@ impl App {
             _ => {}
         }
     }
+
+    pub fn handle_agent_message(&mut self, msg: AgentMessage) {
+        match msg {
+            // Planning messages
+            AgentMessage::PlanningStarted => {
+                self.planning.thinking = true;
+            }
+            AgentMessage::PlanningResponse(text) => {
+                self.planning.thinking = false;
+                self.planning.add_message(MessageRole::Assistant, text);
+            }
+            AgentMessage::PlanningToolCall { name: _, args: _ } => {
+                // Tool calls happen in background, keep thinking
+            }
+            AgentMessage::PlanningToolResult { name: _, output: _ } => {
+                // Results flow into next response
+            }
+            AgentMessage::PlanningComplete { spec_path } => {
+                self.planning.thinking = false;
+                self.planning.add_message(
+                    MessageRole::Assistant,
+                    format!("✓ Spec saved to {}", spec_path),
+                );
+                self.dashboard.load_specs(&self.spec_dir);
+            }
+            AgentMessage::PlanningError(err) => {
+                self.planning.thinking = false;
+                self.planning.add_message(
+                    MessageRole::Assistant,
+                    format!("Error: {}", err),
+                );
+            }
+
+            // Execution messages
+            AgentMessage::ExecutionStarted { spec_path: _ } => {
+                self.execution.running = true;
+                self.execution.output.clear();
+            }
+            AgentMessage::TaskStarted { task_id: _, title } => {
+                self.execution.add_output(OutputItem::Message {
+                    role: "System".to_string(),
+                    content: format!("Starting task: {}", title),
+                });
+            }
+            AgentMessage::TaskResponse(text) => {
+                self.execution.add_output(OutputItem::Message {
+                    role: "Assistant".to_string(),
+                    content: text,
+                });
+            }
+            AgentMessage::TaskToolCall { name, args } => {
+                self.execution.add_output(OutputItem::ToolCall(ToolCall {
+                    name,
+                    output: format!("Args: {}", args),
+                    collapsed: true,
+                }));
+            }
+            AgentMessage::TaskToolResult { name, output } => {
+                self.execution.add_output(OutputItem::ToolCall(ToolCall {
+                    name,
+                    output,
+                    collapsed: false,
+                }));
+            }
+            AgentMessage::TaskComplete { task_id } => {
+                self.execution.add_output(OutputItem::Message {
+                    role: "System".to_string(),
+                    content: format!("✓ Task {} complete", task_id),
+                });
+            }
+            AgentMessage::TaskBlocked { task_id, reason } => {
+                self.execution.add_output(OutputItem::Message {
+                    role: "System".to_string(),
+                    content: format!("✗ Task {} blocked: {}", task_id, reason),
+                });
+            }
+            AgentMessage::ExecutionComplete => {
+                self.execution.running = false;
+                self.execution.add_output(OutputItem::Message {
+                    role: "System".to_string(),
+                    content: "Execution complete".to_string(),
+                });
+                self.dashboard.load_specs(&self.spec_dir);
+            }
+            AgentMessage::ExecutionError(err) => {
+                self.execution.running = false;
+                self.execution.add_output(OutputItem::Message {
+                    role: "Error".to_string(),
+                    content: err,
+                });
+            }
+        }
+    }
 }
 
 impl Default for App {
     fn default() -> Self {
-        Self::new("")
+        let (tx, _) = crate::tui::messages::agent_channel();
+        Self::new("", tx)
     }
 }
