@@ -1,6 +1,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::tui::views::{DashboardState, DashboardMode, ExecutionState, PlanningState, MessageRole};
+use crate::tui::views::{DashboardMode, DashboardState, ExecutionState, MessageRole, PlanningState};
+use crate::tui::widgets::SidePanel;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActiveTab {
@@ -15,6 +16,7 @@ pub struct App {
     pub dashboard: DashboardState,
     pub planning: PlanningState,
     pub execution: ExecutionState,
+    pub side_panel: SidePanel,
 }
 
 impl App {
@@ -25,6 +27,7 @@ impl App {
             dashboard: DashboardState::new(),
             planning: PlanningState::new(),
             execution: ExecutionState::new(),
+            side_panel: SidePanel::new(),
         }
     }
 
@@ -69,6 +72,14 @@ impl App {
             }
             (KeyCode::Char('i'), KeyModifiers::NONE) if self.active_tab == ActiveTab::Planning => {
                 self.planning.insert_mode = true;
+            }
+            (KeyCode::Char('['), KeyModifiers::NONE) | (KeyCode::Char(']'), KeyModifiers::NONE) => {
+                self.side_panel.toggle();
+            }
+            (KeyCode::Esc, _) => {
+                if self.side_panel.visible {
+                    self.side_panel.visible = false;
+                }
             }
             _ => {}
         }

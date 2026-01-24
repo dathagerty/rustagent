@@ -8,7 +8,7 @@ use ratatui::{
 
 use crate::tui::{App, ActiveTab};
 use crate::tui::views::{draw_dashboard, draw_execution, draw_planning};
-use crate::tui::widgets::TabBar;
+use crate::tui::widgets::{draw_side_panel, TabBar};
 
 pub fn draw(frame: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
@@ -35,6 +35,9 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
             draw_execution(frame, chunks[1], &app.execution);
         }
     }
+
+    // Side panel (rendered on top of main content)
+    draw_side_panel(frame, chunks[1], &app.side_panel);
 
     // Status bar
     let status = Line::from(vec![
