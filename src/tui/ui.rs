@@ -7,6 +7,7 @@ use ratatui::{
 };
 
 use crate::tui::{App, ActiveTab};
+use crate::tui::views::draw_dashboard;
 use crate::tui::widgets::TabBar;
 
 pub fn draw(frame: &mut Frame, app: &App) {
@@ -23,22 +24,29 @@ pub fn draw(frame: &mut Frame, app: &App) {
     frame.render_widget(TabBar::new(app.active_tab), chunks[0]);
 
     // Main content area
-    let content_block = Block::default()
-        .borders(Borders::ALL)
-        .title(match app.active_tab {
-            ActiveTab::Dashboard => " Dashboard ",
-            ActiveTab::Planning => " Planning ",
-            ActiveTab::Execution => " Execution ",
-        });
+    match app.active_tab {
+        ActiveTab::Dashboard => {
+            draw_dashboard(frame, chunks[1], &app.dashboard);
+        }
+        _ => {
+            let content_block = Block::default()
+                .borders(Borders::ALL)
+                .title(match app.active_tab {
+                    ActiveTab::Dashboard => " Dashboard ",
+                    ActiveTab::Planning => " Planning ",
+                    ActiveTab::Execution => " Execution ",
+                });
 
-    let placeholder = Paragraph::new(match app.active_tab {
-        ActiveTab::Dashboard => "Dashboard view - coming soon",
-        ActiveTab::Planning => "Planning view - coming soon",
-        ActiveTab::Execution => "Execution view - coming soon",
-    })
-    .block(content_block);
+            let placeholder = Paragraph::new(match app.active_tab {
+                ActiveTab::Dashboard => "Dashboard view - coming soon",
+                ActiveTab::Planning => "Planning view - coming soon",
+                ActiveTab::Execution => "Execution view - coming soon",
+            })
+            .block(content_block);
 
-    frame.render_widget(placeholder, chunks[1]);
+            frame.render_widget(placeholder, chunks[1]);
+        }
+    }
 
     // Status bar
     let status = Line::from(vec![

@@ -1,5 +1,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
+use crate::tui::views::{DashboardState, DashboardMode};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActiveTab {
     Dashboard,
@@ -10,6 +12,7 @@ pub enum ActiveTab {
 pub struct App {
     pub running: bool,
     pub active_tab: ActiveTab,
+    pub dashboard: DashboardState,
 }
 
 impl App {
@@ -17,6 +20,7 @@ impl App {
         Self {
             running: true,
             active_tab: ActiveTab::Dashboard,
+            dashboard: DashboardState::new(),
         }
     }
 
@@ -34,6 +38,12 @@ impl App {
                     ActiveTab::Planning => ActiveTab::Execution,
                     ActiveTab::Execution => ActiveTab::Dashboard,
                 };
+            }
+            (KeyCode::Char('k'), KeyModifiers::NONE) if self.active_tab == ActiveTab::Dashboard => {
+                self.dashboard.mode = DashboardMode::Kanban;
+            }
+            (KeyCode::Char('a'), KeyModifiers::NONE) if self.active_tab == ActiveTab::Dashboard => {
+                self.dashboard.mode = DashboardMode::Activity;
             }
             _ => {}
         }
