@@ -1,7 +1,9 @@
 mod app;
 mod ui;
+pub mod widgets;
 
 pub use app::{App, ActiveTab};
+pub use ui::draw;
 
 use std::io;
 use std::panic;
