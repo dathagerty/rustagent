@@ -112,6 +112,45 @@ impl DashboardState {
             .filter(|s| s.status == *status)
             .nth(self.selected_row)
     }
+
+    pub fn move_selection(&mut self, direction: NavDirection) {
+        match direction {
+            NavDirection::Left => {
+                self.selected_column = self.selected_column.saturating_sub(1);
+                self.selected_row = 0;
+            }
+            NavDirection::Right => {
+                self.selected_column = (self.selected_column + 1).min(3);
+                self.selected_row = 0;
+            }
+            NavDirection::Up => {
+                self.selected_row = self.selected_row.saturating_sub(1);
+            }
+            NavDirection::Down => {
+                let count = self.specs_in_current_column().len();
+                if count > 0 {
+                    self.selected_row = (self.selected_row + 1).min(count - 1);
+                }
+            }
+        }
+    }
+
+    fn specs_in_current_column(&self) -> Vec<&SpecSummary> {
+        let statuses = [SpecStatus::Draft, SpecStatus::Ready, SpecStatus::Running, SpecStatus::Completed];
+        if let Some(status) = statuses.get(self.selected_column) {
+            self.specs.iter().filter(|s| s.status == *status).collect()
+        } else {
+            Vec::new()
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum NavDirection {
+    Up,
+    Down,
+    Left,
+    Right,
 }
 
 impl Default for DashboardState {

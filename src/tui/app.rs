@@ -3,7 +3,8 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use crate::config::Config;
 use crate::tui::messages::{AgentMessage, AgentSender};
 use crate::tui::views::{
-    DashboardMode, DashboardState, ExecutionState, MessageRole, OutputItem, PlanningState, ToolCall,
+    DashboardMode, DashboardState, ExecutionState, MessageRole, NavDirection, OutputItem,
+    PlanningState, ToolCall,
 };
 use crate::tui::widgets::{HelpOverlay, SidePanel, Spinner};
 
@@ -101,11 +102,31 @@ impl App {
                     ActiveTab::Execution => ActiveTab::Dashboard,
                 };
             }
-            (KeyCode::Char('k'), KeyModifiers::NONE) if self.active_tab == ActiveTab::Dashboard => {
+            (KeyCode::Char('K'), KeyModifiers::SHIFT) if self.active_tab == ActiveTab::Dashboard => {
                 self.dashboard.mode = DashboardMode::Kanban;
             }
-            (KeyCode::Char('a'), KeyModifiers::NONE) if self.active_tab == ActiveTab::Dashboard => {
+            (KeyCode::Char('A'), KeyModifiers::SHIFT) if self.active_tab == ActiveTab::Dashboard => {
                 self.dashboard.mode = DashboardMode::Activity;
+            }
+            (KeyCode::Up, KeyModifiers::NONE) | (KeyCode::Char('k'), KeyModifiers::NONE)
+                if self.active_tab == ActiveTab::Dashboard =>
+            {
+                self.dashboard.move_selection(NavDirection::Up);
+            }
+            (KeyCode::Down, KeyModifiers::NONE) | (KeyCode::Char('j'), KeyModifiers::NONE)
+                if self.active_tab == ActiveTab::Dashboard =>
+            {
+                self.dashboard.move_selection(NavDirection::Down);
+            }
+            (KeyCode::Left, KeyModifiers::NONE) | (KeyCode::Char('h'), KeyModifiers::NONE)
+                if self.active_tab == ActiveTab::Dashboard =>
+            {
+                self.dashboard.move_selection(NavDirection::Left);
+            }
+            (KeyCode::Right, KeyModifiers::NONE) | (KeyCode::Char('l'), KeyModifiers::NONE)
+                if self.active_tab == ActiveTab::Dashboard =>
+            {
+                self.dashboard.move_selection(NavDirection::Right);
             }
             (KeyCode::Enter, KeyModifiers::NONE) if self.active_tab == ActiveTab::Dashboard => {
                 if let Some(spec) = self.dashboard.selected_spec() {
