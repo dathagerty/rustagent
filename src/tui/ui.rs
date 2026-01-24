@@ -7,10 +7,10 @@ use ratatui::{
 };
 
 use crate::tui::{App, ActiveTab};
-use crate::tui::views::draw_dashboard;
+use crate::tui::views::{draw_dashboard, draw_planning};
 use crate::tui::widgets::TabBar;
 
-pub fn draw(frame: &mut Frame, app: &App) {
+pub fn draw(frame: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -28,21 +28,16 @@ pub fn draw(frame: &mut Frame, app: &App) {
         ActiveTab::Dashboard => {
             draw_dashboard(frame, chunks[1], &app.dashboard);
         }
-        _ => {
+        ActiveTab::Planning => {
+            draw_planning(frame, chunks[1], &mut app.planning);
+        }
+        ActiveTab::Execution => {
             let content_block = Block::default()
                 .borders(Borders::ALL)
-                .title(match app.active_tab {
-                    ActiveTab::Dashboard => " Dashboard ",
-                    ActiveTab::Planning => " Planning ",
-                    ActiveTab::Execution => " Execution ",
-                });
+                .title(" Execution ");
 
-            let placeholder = Paragraph::new(match app.active_tab {
-                ActiveTab::Dashboard => "Dashboard view - coming soon",
-                ActiveTab::Planning => "Planning view - coming soon",
-                ActiveTab::Execution => "Execution view - coming soon",
-            })
-            .block(content_block);
+            let placeholder = Paragraph::new("Execution view - coming soon")
+                .block(content_block);
 
             frame.render_widget(placeholder, chunks[1]);
         }

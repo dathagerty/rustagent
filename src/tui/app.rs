@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::tui::views::{DashboardState, DashboardMode};
+use crate::tui::views::{DashboardState, DashboardMode, PlanningState, MessageRole};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActiveTab {
@@ -13,6 +13,7 @@ pub struct App {
     pub running: bool,
     pub active_tab: ActiveTab,
     pub dashboard: DashboardState,
+    pub planning: PlanningState,
 }
 
 impl App {
@@ -21,11 +22,30 @@ impl App {
             running: true,
             active_tab: ActiveTab::Dashboard,
             dashboard: DashboardState::new(),
+            planning: PlanningState::new(),
         }
     }
 
     /// Handle key events. Uses full KeyEvent to preserve modifiers.
     pub fn handle_key(&mut self, key: KeyEvent) {
+        // Handle planning insert mode separately
+        if self.active_tab == ActiveTab::Planning && self.planning.insert_mode {
+            match key.code {
+                KeyCode::Esc => {
+                    self.planning.insert_mode = false;
+                }
+                KeyCode::Enter => {
+                    if let Some(text) = self.planning.submit_input() {
+                        self.planning.add_message(MessageRole::User, text);
+                    }
+                }
+                _ => {
+                    self.planning.input.input(key);
+                }
+            }
+            return;
+        }
+
         match (key.code, key.modifiers) {
             (KeyCode::Char('c'), KeyModifiers::CONTROL) => self.running = false,
             (KeyCode::Char('q'), KeyModifiers::NONE) => self.running = false,
@@ -44,6 +64,9 @@ impl App {
             }
             (KeyCode::Char('a'), KeyModifiers::NONE) if self.active_tab == ActiveTab::Dashboard => {
                 self.dashboard.mode = DashboardMode::Activity;
+            }
+            (KeyCode::Char('i'), KeyModifiers::NONE) if self.active_tab == ActiveTab::Planning => {
+                self.planning.insert_mode = true;
             }
             _ => {}
         }
