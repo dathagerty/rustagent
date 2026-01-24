@@ -4,6 +4,9 @@
 
 Rustagent is an AI agent framework for autonomous task execution in Rust. It uses a two-phase approach: a Planning Agent that breaks down high-level goals into executable tasks, and the Ralph Loop that executes those tasks iteratively with tool access.
 
+The canonical [repository](https://tangled.org/dathagerty.com/rustagent) for this project is on [tangled.org](https://tangled.org).
+It is [mirrored](https://github.com/dathagerty/rustagent) on [GitHub](https://github.com) for discoverability.
+
 ## Features
 
 - **Planning Agent**: Converts high-level specifications into structured execution plans
@@ -295,7 +298,7 @@ Rustagent provides the following tools to agents:
     }
   }
   ```
-  
+
   Or to signal blocked:
   ```json
   {

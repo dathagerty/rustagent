@@ -18,16 +18,16 @@ api_key = "${OPENAI_API_KEY}"
 base_url = "http://localhost:11434"
 
 # Optional: Override LLM for planning mode
-# [planning.llm]
-# provider = "anthropic"
-# model = "claude-opus-4-20250514"
-# max_tokens = 16384
+[planning.llm]
+provider = "anthropic"
+model = "claude-opus-4-20250514"
+max_tokens = 16384
 
 # Optional: Override LLM for ralph mode
-# [ralph.llm]
-# provider = "anthropic"
-# model = "claude-sonnet-4-20250514"
-# max_tokens = 4096
+[ralph.llm]
+provider = "anthropic"
+model = "claude-sonnet-4-20250514"
+max_tokens = 4096
 
 # Agent configuration
 [rustagent]
@@ -37,7 +37,7 @@ max_iterations = 100  # Set to null for unlimited
 # Security configuration
 [security]
 shell_policy = "allowlist"  # Options: "allowlist", "blocklist", "unrestricted"
-allowed_commands = ["git", "cargo", "npm", "ls", "cat", "grep", "find", "echo", "pwd", "mkdir", "touch"]
-blocked_patterns = []
+allowed_commands = ["git", "cargo", "bun", "ls", "cat", "grep", "find", "echo", "pwd", "mkdir", "touch"]
+blocked_patterns = ["npm"]
 max_file_size_mb = 10
 allowed_paths = ["."]
