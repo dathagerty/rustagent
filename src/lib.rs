@@ -6,3 +6,4 @@ pub mod ralph;
 pub mod security;
 pub mod spec;
 pub mod tools;
+pub mod tui;
