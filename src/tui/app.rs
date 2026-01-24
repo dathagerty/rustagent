@@ -5,7 +5,7 @@ use crate::tui::messages::{AgentMessage, AgentSender};
 use crate::tui::views::{
     DashboardMode, DashboardState, ExecutionState, MessageRole, OutputItem, PlanningState, ToolCall,
 };
-use crate::tui::widgets::SidePanel;
+use crate::tui::widgets::{HelpOverlay, SidePanel, Spinner};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActiveTab {
@@ -24,6 +24,8 @@ pub struct App {
     pub spec_dir: String,
     pub agent_tx: AgentSender,
     pub config: Option<Config>,
+    pub spinner: Spinner,
+    pub help: HelpOverlay,
 }
 
 impl App {
@@ -41,6 +43,8 @@ impl App {
             spec_dir: spec_dir.to_string(),
             agent_tx,
             config,
+            spinner: Spinner::new(),
+            help: HelpOverlay::new(),
         }
     }
 
@@ -103,14 +107,45 @@ impl App {
             (KeyCode::Char('a'), KeyModifiers::NONE) if self.active_tab == ActiveTab::Dashboard => {
                 self.dashboard.mode = DashboardMode::Activity;
             }
+            (KeyCode::Enter, KeyModifiers::NONE) if self.active_tab == ActiveTab::Dashboard => {
+                if let Some(spec) = self.dashboard.selected_spec() {
+                    let spec_path = spec.path.clone();
+
+                    if let Some(ref config) = self.config {
+                        let tx = self.agent_tx.clone();
+                        let config = config.clone();
+
+                        // Switch to execution tab
+                        self.active_tab = ActiveTab::Execution;
+
+                        tokio::spawn(async move {
+                            match crate::ralph::RalphLoop::new(config, spec_path, None) {
+                                Ok(ralph) => {
+                                    if let Err(e) = ralph.run_with_sender(tx.clone()).await {
+                                        let _ = tx.send(AgentMessage::ExecutionError(e.to_string())).await;
+                                    }
+                                }
+                                Err(e) => {
+                                    let _ = tx.send(AgentMessage::ExecutionError(e.to_string())).await;
+                                }
+                            }
+                        });
+                    }
+                }
+            }
             (KeyCode::Char('i'), KeyModifiers::NONE) if self.active_tab == ActiveTab::Planning => {
                 self.planning.insert_mode = true;
             }
             (KeyCode::Char('['), KeyModifiers::NONE) | (KeyCode::Char(']'), KeyModifiers::NONE) => {
                 self.side_panel.toggle();
             }
+            (KeyCode::Char('?'), KeyModifiers::NONE) => {
+                self.help.toggle();
+            }
             (KeyCode::Esc, _) => {
-                if self.side_panel.visible {
+                if self.help.visible {
+                    self.help.visible = false;
+                } else if self.side_panel.visible {
                     self.side_panel.visible = false;
                 }
             }

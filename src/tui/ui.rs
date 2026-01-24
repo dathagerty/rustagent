@@ -8,7 +8,7 @@ use ratatui::{
 
 use crate::tui::{App, ActiveTab};
 use crate::tui::views::{draw_dashboard, draw_execution, draw_planning};
-use crate::tui::widgets::{draw_side_panel, TabBar};
+use crate::tui::widgets::{draw_help, draw_side_panel, TabBar};
 
 pub fn draw(frame: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
@@ -29,7 +29,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
             draw_dashboard(frame, chunks[1], &app.dashboard);
         }
         ActiveTab::Planning => {
-            draw_planning(frame, chunks[1], &mut app.planning);
+            draw_planning(frame, chunks[1], &mut app.planning, app.spinner.current());
         }
         ActiveTab::Execution => {
             draw_execution(frame, chunks[1], &app.execution);
@@ -38,6 +38,11 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
 
     // Side panel (rendered on top of main content)
     draw_side_panel(frame, chunks[1], &app.side_panel);
+
+    // Help overlay (rendered on top of everything)
+    if app.help.visible {
+        draw_help(frame, frame.area());
+    }
 
     // Status bar
     let status = Line::from(vec![

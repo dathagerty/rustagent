@@ -76,6 +76,8 @@ async fn run_loop(
 
         tokio::select! {
             _ = interval.tick() => {
+                app.spinner.tick();
+
                 while event::poll(Duration::ZERO)? {
                     match event::read()? {
                         Event::Key(key) if key.kind == KeyEventKind::Press => {

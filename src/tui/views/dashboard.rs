@@ -26,6 +26,7 @@ pub struct DashboardState {
 #[derive(Debug, Clone)]
 pub struct SpecSummary {
     pub name: String,
+    pub path: String,
     pub status: SpecStatus,
     pub task_progress: (usize, usize),
 }
@@ -93,12 +94,23 @@ impl DashboardState {
 
                     self.specs.push(SpecSummary {
                         name: spec.name,
+                        path: spec_file.to_string_lossy().to_string(),
                         status,
                         task_progress: (completed, total),
                     });
                 }
             }
         }
+    }
+
+    pub fn selected_spec(&self) -> Option<&SpecSummary> {
+        let statuses = [SpecStatus::Draft, SpecStatus::Ready, SpecStatus::Running, SpecStatus::Completed];
+        let status = statuses.get(self.selected_column)?;
+
+        self.specs
+            .iter()
+            .filter(|s| s.status == *status)
+            .nth(self.selected_row)
     }
 }
 

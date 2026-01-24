@@ -66,7 +66,7 @@ impl Default for PlanningState {
     }
 }
 
-pub fn draw_planning(frame: &mut Frame, area: Rect, state: &mut PlanningState) {
+pub fn draw_planning(frame: &mut Frame, area: Rect, state: &mut PlanningState, spinner_char: char) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -76,7 +76,7 @@ pub fn draw_planning(frame: &mut Frame, area: Rect, state: &mut PlanningState) {
         ])
         .split(area);
 
-    draw_chat_history(frame, chunks[0], state);
+    draw_chat_history(frame, chunks[0], state, spinner_char);
 
     let input_block = Block::default()
         .borders(Borders::ALL)
@@ -103,7 +103,7 @@ pub fn draw_planning(frame: &mut Frame, area: Rect, state: &mut PlanningState) {
     frame.render_widget(hints_bar, chunks[2]);
 }
 
-fn draw_chat_history(frame: &mut Frame, area: Rect, state: &PlanningState) {
+fn draw_chat_history(frame: &mut Frame, area: Rect, state: &PlanningState, spinner_char: char) {
     let block = Block::default()
         .borders(Borders::ALL)
         .title(" Chat ");
@@ -146,7 +146,7 @@ fn draw_chat_history(frame: &mut Frame, area: Rect, state: &PlanningState) {
                     .add_modifier(Modifier::BOLD),
             ),
             Span::raw(" "),
-            Span::styled("◐", Style::default().fg(Color::Yellow)),
+            Span::styled(spinner_char.to_string(), Style::default().fg(Color::Yellow)),
         ]));
     }
 
