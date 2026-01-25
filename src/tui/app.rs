@@ -180,6 +180,74 @@ impl App {
             (KeyCode::Char('i'), KeyModifiers::NONE) if self.active_tab == ActiveTab::Planning => {
                 self.planning.insert_mode = true;
             }
+            // Planning tab scrolling (not in insert mode)
+            (KeyCode::Up, KeyModifiers::NONE) | (KeyCode::Char('k'), KeyModifiers::NONE)
+                if self.active_tab == ActiveTab::Planning && !self.planning.insert_mode =>
+            {
+                self.planning.scroll_up(1);
+            }
+            (KeyCode::Down, KeyModifiers::NONE) | (KeyCode::Char('j'), KeyModifiers::NONE)
+                if self.active_tab == ActiveTab::Planning && !self.planning.insert_mode =>
+            {
+                self.planning.scroll_down(1);
+            }
+            (KeyCode::PageUp, KeyModifiers::NONE)
+                if self.active_tab == ActiveTab::Planning && !self.planning.insert_mode =>
+            {
+                let page_size = self.planning.viewport_height.saturating_sub(1).max(1);
+                self.planning.scroll_up(page_size);
+            }
+            (KeyCode::PageDown, KeyModifiers::NONE)
+                if self.active_tab == ActiveTab::Planning && !self.planning.insert_mode =>
+            {
+                let page_size = self.planning.viewport_height.saturating_sub(1).max(1);
+                self.planning.scroll_down(page_size);
+            }
+            (KeyCode::Home, KeyModifiers::NONE)
+                if self.active_tab == ActiveTab::Planning && !self.planning.insert_mode =>
+            {
+                self.planning.scroll_offset = 0;
+                self.planning.auto_scroll = false;
+            }
+            (KeyCode::End, KeyModifiers::NONE)
+                if self.active_tab == ActiveTab::Planning && !self.planning.insert_mode =>
+            {
+                self.planning.scroll_to_bottom();
+            }
+            // Execution tab scrolling
+            (KeyCode::Up, KeyModifiers::NONE) | (KeyCode::Char('k'), KeyModifiers::NONE)
+                if self.active_tab == ActiveTab::Execution =>
+            {
+                self.execution.scroll_up(1);
+            }
+            (KeyCode::Down, KeyModifiers::NONE) | (KeyCode::Char('j'), KeyModifiers::NONE)
+                if self.active_tab == ActiveTab::Execution =>
+            {
+                self.execution.scroll_down(1);
+            }
+            (KeyCode::PageUp, KeyModifiers::NONE)
+                if self.active_tab == ActiveTab::Execution =>
+            {
+                let page_size = self.execution.viewport_height.saturating_sub(1).max(1);
+                self.execution.scroll_up(page_size);
+            }
+            (KeyCode::PageDown, KeyModifiers::NONE)
+                if self.active_tab == ActiveTab::Execution =>
+            {
+                let page_size = self.execution.viewport_height.saturating_sub(1).max(1);
+                self.execution.scroll_down(page_size);
+            }
+            (KeyCode::Home, KeyModifiers::NONE)
+                if self.active_tab == ActiveTab::Execution =>
+            {
+                self.execution.scroll_offset = 0;
+                self.execution.auto_scroll = false;
+            }
+            (KeyCode::End, KeyModifiers::NONE)
+                if self.active_tab == ActiveTab::Execution =>
+            {
+                self.execution.scroll_to_bottom();
+            }
             (KeyCode::Char('['), KeyModifiers::NONE) | (KeyCode::Char(']'), KeyModifiers::NONE) => {
                 self.side_panel.toggle();
             }

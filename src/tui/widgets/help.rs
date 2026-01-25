@@ -57,6 +57,14 @@ pub fn draw_help(frame: &mut Frame, area: Rect) {
         Line::from("  i          Enter insert mode"),
         Line::from("  Esc        Exit insert mode"),
         Line::from("  Enter      Send message"),
+        Line::from("  ↑↓/jk      Scroll (not in insert)"),
+        Line::from("  PgUp/PgDn  Page scroll"),
+        Line::from("  Home/End   Jump to top/bottom"),
+        Line::from(""),
+        Line::from(Span::styled("Execution", Style::default().add_modifier(Modifier::BOLD))),
+        Line::from("  ↑↓/jk      Scroll output"),
+        Line::from("  PgUp/PgDn  Page scroll"),
+        Line::from("  Home/End   Jump to top/bottom"),
     ];
 
     let paragraph = Paragraph::new(lines).block(block);

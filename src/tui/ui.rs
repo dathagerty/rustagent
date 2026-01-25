@@ -32,7 +32,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
             draw_planning(frame, chunks[1], &mut app.planning, app.spinner.current());
         }
         ActiveTab::Execution => {
-            draw_execution(frame, chunks[1], &app.execution, app.spinner.current());
+            draw_execution(frame, chunks[1], &mut app.execution, app.spinner.current());
         }
     }
 
