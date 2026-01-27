@@ -122,6 +122,7 @@ pub fn classify_status(status: StatusCode) -> ErrorKind {
     match status.as_u16() {
         429 => ErrorKind::RateLimited,
         401 | 403 => ErrorKind::Auth,
+        408 | 425 => ErrorKind::Transient,
         400..=499 => ErrorKind::BadRequest,
         500..=599 => ErrorKind::Transient,
         _ => ErrorKind::Unknown,

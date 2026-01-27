@@ -82,6 +82,11 @@ impl OllamaClient {
         }
     }
 
+    pub fn with_retry_config(mut self, config: RetryConfig) -> Self {
+        self.retry_config = config;
+        self
+    }
+
     pub fn format_request(
         &self,
         messages: &[Message],
@@ -213,7 +218,7 @@ impl LlmClient for OllamaClient {
                 info!("Ollama API call successful");
                 Ok(response)
             }
-            Err(e) => Err(anyhow::anyhow!("{}", e)),
+            Err(e) => Err(e.into()),
         }
     }
 }

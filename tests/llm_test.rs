@@ -74,6 +74,7 @@ fn test_classify_status_retryable() {
     assert_eq!(classify_status(StatusCode::BAD_GATEWAY), ErrorKind::Transient);
     assert_eq!(classify_status(StatusCode::SERVICE_UNAVAILABLE), ErrorKind::Transient);
     assert_eq!(classify_status(StatusCode::GATEWAY_TIMEOUT), ErrorKind::Transient);
+    assert_eq!(classify_status(StatusCode::REQUEST_TIMEOUT), ErrorKind::Transient);
 }
 
 #[test]

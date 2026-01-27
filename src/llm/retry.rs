@@ -122,20 +122,29 @@ pub fn parse_retry_after_header(resp: &HttpResponse) -> Option<Duration> {
 }
 
 fn parse_http_date(value: &str) -> Option<Duration> {
-    use std::time::UNIX_EPOCH;
+    use chrono::{DateTime, NaiveDateTime, Utc};
+
+    if let Ok(parsed) = DateTime::parse_from_rfc2822(value) {
+        let now = Utc::now();
+        let diff = parsed.signed_duration_since(now);
+        if diff.num_seconds() > 0 {
+            return Some(Duration::from_secs(diff.num_seconds() as u64));
+        }
+        return None;
+    }
 
     let formats = [
         "%a, %d %b %Y %H:%M:%S GMT",
         "%A, %d-%b-%y %H:%M:%S GMT",
-        "%a %b %e %H:%M:%S %Y",
     ];
 
     for fmt in &formats {
-        if let Ok(parsed) = chrono::DateTime::parse_from_str(value, fmt) {
-            let target = UNIX_EPOCH + Duration::from_secs(parsed.timestamp() as u64);
-            let now = SystemTime::now();
-            if let Ok(dur) = target.duration_since(now) {
-                return Some(dur);
+        if let Ok(naive) = NaiveDateTime::parse_from_str(value, fmt) {
+            let parsed = naive.and_utc();
+            let now = Utc::now();
+            let diff = parsed.signed_duration_since(now);
+            if diff.num_seconds() > 0 {
+                return Some(Duration::from_secs(diff.num_seconds() as u64));
             }
         }
     }
