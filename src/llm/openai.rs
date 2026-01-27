@@ -1,17 +1,20 @@
+use super::error::LlmError;
+use super::retry::{parse_retry_after_header, parse_retry_from_message, with_retry, RetryConfig};
 use super::{LlmClient, Message, Response, ResponseContent, Role, ToolCall, ToolDefinition};
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use tokio::time::{Duration, sleep};
-use tracing::{info, instrument, warn};
+use tracing::{info, instrument};
 
 const OPENAI_API_URL: &str = "https://api.openai.com/v1/chat/completions";
+const PROVIDER: &str = "openai";
 
 pub struct OpenAiClient {
     api_key: String,
     model: String,
     max_tokens: u32,
     client: Client,
+    retry_config: RetryConfig,
 }
 
 #[derive(Debug, Serialize)]
@@ -81,6 +84,7 @@ impl OpenAiClient {
             model,
             max_tokens,
             client: Client::new(),
+            retry_config: RetryConfig::default(),
         }
     }
 
@@ -131,7 +135,10 @@ impl OpenAiClient {
         Ok(serde_json::to_value(request)?)
     }
 
-    async fn send_request(&self, request_body: &serde_json::Value) -> anyhow::Result<Response> {
+    async fn send_request_once(
+        &self,
+        request_body: &serde_json::Value,
+    ) -> Result<Response, LlmError> {
         let response = self
             .client
             .post(OPENAI_API_URL)
@@ -139,20 +146,27 @@ impl OpenAiClient {
             .header("Content-Type", "application/json")
             .json(&request_body)
             .send()
-            .await?;
+            .await
+            .map_err(|e| LlmError::network(PROVIDER, Some(e.to_string())))?;
 
         if !response.status().is_success() {
             let status = response.status();
+            let retry_after = parse_retry_after_header(&response);
             let body = response.text().await.unwrap_or_default();
-            anyhow::bail!("OpenAI API error {}: {}", status, body);
+
+            let retry_after = retry_after.or_else(|| parse_retry_from_message(&body));
+
+            return Err(LlmError::from_status(PROVIDER, status, body, retry_after));
         }
 
-        let openai_response: OpenAiResponse = response.json().await?;
+        let openai_response: OpenAiResponse = response
+            .json()
+            .await
+            .map_err(|e| LlmError::bad_request(PROVIDER, Some(e.to_string())))?;
 
-        let choice = openai_response
-            .choices
-            .first()
-            .ok_or_else(|| anyhow::anyhow!("No choices in response"))?;
+        let choice = openai_response.choices.first().ok_or_else(|| {
+            LlmError::bad_request(PROVIDER, Some("No choices in response".to_string()))
+        })?;
 
         let content = if let Some(tool_calls) = &choice.message.tool_calls {
             let calls: Vec<ToolCall> = tool_calls
@@ -189,48 +203,20 @@ impl LlmClient for OpenAiClient {
             tool_count = tools.len(),
             "Starting OpenAI API call"
         );
+
         let request_body = self.format_request(&messages, tools)?;
 
-        let mut retries = 0;
-        let max_retries = 3;
+        let result = with_retry(PROVIDER, &self.retry_config, || {
+            self.send_request_once(&request_body)
+        })
+        .await;
 
-        loop {
-            let error_msg = match self.send_request(&request_body).await {
-                Ok(response) => {
-                    info!("OpenAI API call successful");
-                    return Ok(response);
-                }
-                Err(e) => {
-                    let msg = e.to_string();
-                    if retries >= max_retries || !is_retryable_error(&msg) {
-                        warn!(error = %msg, "OpenAI API call failed permanently");
-                        return Err(e);
-                    }
-                    msg
-                }
-            };
-
-            retries += 1;
-            let delay = Duration::from_secs(2u64.pow(retries));
-            warn!(
-                attempt = retries,
-                max_retries = max_retries,
-                delay_secs = delay.as_secs(),
-                error = %error_msg,
-                "OpenAI API call failed, retrying"
-            );
-            sleep(delay).await;
+        match result {
+            Ok(response) => {
+                info!("OpenAI API call successful");
+                Ok(response)
+            }
+            Err(e) => Err(anyhow::anyhow!("{}", e)),
         }
     }
-}
-
-fn is_retryable_error(error_msg: &str) -> bool {
-    let msg = error_msg.to_lowercase();
-    msg.contains("rate limit")
-        || msg.contains("timeout")
-        || msg.contains("connection")
-        || msg.contains("429")
-        || msg.contains("502")
-        || msg.contains("503")
-        || msg.contains("504")
 }

@@ -64,20 +64,34 @@ fn test_format_request_with_system_message() {
     assert_eq!(msgs[0].get("role").unwrap().as_str().unwrap(), "user");
 }
 
-use rustagent::llm::anthropic::is_retryable_error;
+use reqwest::StatusCode;
+use rustagent::llm::error::{classify_status, ErrorKind};
+use rustagent::llm::retry::parse_retry_from_message;
 
 #[test]
-fn test_is_retryable_error() {
-    // Test retryable errors
-    assert!(is_retryable_error("rate limit exceeded"));
-    assert!(is_retryable_error("connection timeout"));
-    assert!(is_retryable_error("network error"));
-    assert!(is_retryable_error("502 Bad Gateway"));
-    assert!(is_retryable_error("503 Service Unavailable"));
-    assert!(is_retryable_error("504 Gateway Timeout"));
+fn test_classify_status_retryable() {
+    assert_eq!(classify_status(StatusCode::TOO_MANY_REQUESTS), ErrorKind::RateLimited);
+    assert_eq!(classify_status(StatusCode::BAD_GATEWAY), ErrorKind::Transient);
+    assert_eq!(classify_status(StatusCode::SERVICE_UNAVAILABLE), ErrorKind::Transient);
+    assert_eq!(classify_status(StatusCode::GATEWAY_TIMEOUT), ErrorKind::Transient);
+}
 
-    // Test non-retryable errors
-    assert!(!is_retryable_error("invalid request"));
-    assert!(!is_retryable_error("400 Bad Request"));
-    assert!(!is_retryable_error("401 Unauthorized"));
+#[test]
+fn test_classify_status_non_retryable() {
+    assert_eq!(classify_status(StatusCode::BAD_REQUEST), ErrorKind::BadRequest);
+    assert_eq!(classify_status(StatusCode::UNAUTHORIZED), ErrorKind::Auth);
+    assert_eq!(classify_status(StatusCode::FORBIDDEN), ErrorKind::Auth);
+}
+
+#[test]
+fn test_parse_retry_from_message() {
+    let msg = "Rate limit reached. Please try again in 45.622s.";
+    let dur = parse_retry_from_message(msg).unwrap();
+    assert!(dur.as_millis() >= 45000 && dur.as_millis() <= 46000);
+
+    let msg2 = "Try again in 500ms";
+    let dur2 = parse_retry_from_message(msg2).unwrap();
+    assert_eq!(dur2.as_millis(), 500);
+
+    assert!(parse_retry_from_message("Something went wrong").is_none());
 }

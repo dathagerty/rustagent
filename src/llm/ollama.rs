@@ -1,14 +1,18 @@
+use super::error::LlmError;
+use super::retry::{with_retry, RetryConfig};
 use super::{LlmClient, Message, Response, ResponseContent, Role, ToolCall, ToolDefinition};
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use tokio::time::{Duration, sleep};
-use tracing::{info, instrument, warn};
+use tracing::{info, instrument};
+
+const PROVIDER: &str = "ollama";
 
 pub struct OllamaClient {
     base_url: String,
     model: String,
     client: Client,
+    retry_config: RetryConfig,
 }
 
 #[derive(Debug, Serialize)]
@@ -74,6 +78,7 @@ impl OllamaClient {
             base_url,
             model,
             client: Client::new(),
+            retry_config: RetryConfig::default(),
         }
     }
 
@@ -124,7 +129,10 @@ impl OllamaClient {
         Ok(serde_json::to_value(request)?)
     }
 
-    async fn send_request(&self, request_body: &serde_json::Value) -> anyhow::Result<Response> {
+    async fn send_request_once(
+        &self,
+        request_body: &serde_json::Value,
+    ) -> Result<Response, LlmError> {
         let url = format!("{}/api/chat", self.base_url);
 
         let response = self
@@ -133,15 +141,19 @@ impl OllamaClient {
             .header("Content-Type", "application/json")
             .json(&request_body)
             .send()
-            .await?;
+            .await
+            .map_err(|e| LlmError::network(PROVIDER, Some(e.to_string())))?;
 
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            anyhow::bail!("Ollama API error {}: {}", status, body);
+            return Err(LlmError::from_status(PROVIDER, status, body, None));
         }
 
-        let ollama_response: OllamaResponse = response.json().await?;
+        let ollama_response: OllamaResponse = response
+            .json()
+            .await
+            .map_err(|e| LlmError::bad_request(PROVIDER, Some(e.to_string())))?;
 
         let content = if let Some(tool_calls) = ollama_response.message.tool_calls {
             let calls: Vec<ToolCall> = tool_calls
@@ -188,44 +200,20 @@ impl LlmClient for OllamaClient {
             tool_count = tools.len(),
             "Starting Ollama API call"
         );
+
         let request_body = self.format_request(&messages, tools)?;
 
-        let mut retries = 0;
-        let max_retries = 3;
+        let result = with_retry(PROVIDER, &self.retry_config, || {
+            self.send_request_once(&request_body)
+        })
+        .await;
 
-        loop {
-            let error_msg = match self.send_request(&request_body).await {
-                Ok(response) => {
-                    info!("Ollama API call successful");
-                    return Ok(response);
-                }
-                Err(e) => {
-                    let msg = e.to_string();
-                    if retries >= max_retries || !is_retryable_error(&msg) {
-                        warn!(error = %msg, "Ollama API call failed permanently");
-                        return Err(e);
-                    }
-                    msg
-                }
-            };
-
-            retries += 1;
-            let delay = Duration::from_secs(2u64.pow(retries));
-            warn!(
-                attempt = retries,
-                max_retries = max_retries,
-                delay_secs = delay.as_secs(),
-                error = %error_msg,
-                "Ollama API call failed, retrying"
-            );
-            sleep(delay).await;
+        match result {
+            Ok(response) => {
+                info!("Ollama API call successful");
+                Ok(response)
+            }
+            Err(e) => Err(anyhow::anyhow!("{}", e)),
         }
     }
-}
-
-fn is_retryable_error(error_msg: &str) -> bool {
-    let msg = error_msg.to_lowercase();
-    msg.contains("connection refused")
-        || msg.contains("timeout")
-        || msg.contains("connection reset")
 }
