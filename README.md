@@ -9,10 +9,12 @@ It is [mirrored](https://github.com/dathagerty/rustagent) on [GitHub](https://gi
 
 ## Features
 
+- **Interactive TUI**: Terminal user interface built with ratatui for managing specs and monitoring agent execution
 - **Planning Agent**: Converts high-level specifications into structured execution plans
 - **Ralph Loop**: Autonomous execution agent with Read-Act-Learn-Plan-Help cycle
 - **Multiple LLM Support**: Works with Anthropic (Claude), OpenAI (GPT), and Ollama (local models)
-- **Tool System**: Extensible tools for file operations and shell commands
+- **Tool System**: Extensible tools for file operations and shell commands with security validation
+- **Permission System**: CLI prompts for sensitive operations with path and command validation
 - **Structured Specs**: JSON-based specification format with tasks, acceptance criteria, and learnings
 
 ## Installation
@@ -60,19 +62,27 @@ cp rustagent.toml.example rustagent.toml
 ### Configuration Format
 
 ```toml
-# LLM Configuration
+# LLM Configuration (required)
 [llm]
 provider = "anthropic"  # Options: "anthropic", "openai", "ollama"
-model = "claude-3-5-sonnet-20241022"
+model = "claude-sonnet-4-20250514"
+max_tokens = 8192       # Maximum tokens per response
 
 # Provider-specific configuration
 [anthropic]
-api_key = "${ANTHROPIC_API_KEY}"  # Use environment variable substitution
+api_key = "${ANTHROPIC_API_KEY}"  # Environment variable substitution
 
-# Rustagent settings
+# Agent settings (required)
 [rustagent]
-spec_dir = "specs"          # Where to store specification files
-max_iterations = 10         # Optional: limit execution iterations
+spec_dir = "specs"       # Directory for specification files
+max_iterations = 100     # Optional: limit execution iterations
+
+# Security settings (optional, has safe defaults)
+[security]
+shell_policy = "allowlist"  # "allowlist", "blocklist", or "unrestricted"
+allowed_commands = ["git", "cargo", "npm", "ls", "cat", "grep", "find"]
+max_file_size_mb = 10
+allowed_paths = ["."]
 ```
 
 ### Environment Variables
@@ -93,7 +103,7 @@ export OPENAI_API_KEY="your-api-key-here"
 ```toml
 [llm]
 provider = "anthropic"
-model = "claude-3-5-sonnet-20241022"
+model = "claude-sonnet-4-20250514"
 
 [anthropic]
 api_key = "${ANTHROPIC_API_KEY}"
@@ -119,9 +129,72 @@ model = "llama2"
 base_url = "http://localhost:11434"
 ```
 
+### Mode-Specific LLM Overrides
+
+Use different models for planning vs execution:
+
+```toml
+# Default LLM
+[llm]
+provider = "anthropic"
+model = "claude-sonnet-4-20250514"
+
+# Use a more capable model for planning
+[planning.llm]
+provider = "anthropic"
+model = "claude-opus-4-20250514"
+max_tokens = 16384
+
+# Use a faster model for Ralph execution
+[ralph.llm]
+provider = "anthropic"
+model = "claude-sonnet-4-20250514"
+max_tokens = 4096
+```
+
+### Security Configuration
+
+Control what operations the agent can perform:
+
+```toml
+[security]
+# Shell policy options:
+#   "allowlist"    - Only listed commands can run (default, safest)
+#   "blocklist"    - All except blocked patterns can run
+#   "unrestricted" - All commands can run
+shell_policy = "allowlist"
+
+# Commands allowed when using allowlist policy
+allowed_commands = ["git", "cargo", "npm", "ls", "cat", "grep", "find", "echo", "pwd", "mkdir", "touch"]
+
+# Regex patterns to block when using blocklist policy
+blocked_patterns = ["rm\\s+-rf", "sudo"]
+
+# Maximum file size the agent can write (MB)
+max_file_size_mb = 10
+
+# Paths the agent can access (relative or absolute)
+allowed_paths = ["."]
+```
+
 ## Usage
 
-Rustagent provides three main commands: `init`, `plan`, and `run`.
+Rustagent provides four commands: `init`, `plan`, `run`, and `tui`. Running `rustagent` without a command launches the TUI by default.
+
+### Interactive TUI
+
+Launch the terminal user interface:
+
+```bash
+rustagent tui
+# or simply
+rustagent
+```
+
+The TUI provides:
+- Spec browsing and management
+- Real-time agent execution monitoring
+- Interactive spec creation and editing
 
 ### 1. Initialize a Specification
 
@@ -374,17 +447,41 @@ cargo doc --open
 ```
 rustagent/
 ├── src/
-│   ├── main.rs           # CLI entry point and command handling
-│   ├── config.rs         # Configuration loading and validation
-│   ├── llm.rs            # LLM client implementations (Anthropic, OpenAI, Ollama)
-│   ├── planning.rs       # Planning Agent implementation
-│   ├── ralph.rs          # Ralph Loop execution engine
+│   ├── main.rs           # CLI entry point with init/plan/run/tui commands
+│   ├── lib.rs            # Library exports
+│   ├── config.rs         # Configuration loading with env var substitution
+│   ├── logging.rs        # File-based tracing with daily rotation
 │   ├── spec.rs           # Specification data structures
-│   └── tools/
-│       ├── mod.rs        # Tool trait and registry
-│       ├── file.rs       # File operation tools
-│       └── shell.rs      # Shell command execution tool
+│   ├── llm/
+│   │   ├── mod.rs        # LlmClient trait and Message types
+│   │   ├── anthropic.rs  # Anthropic (Claude) client
+│   │   ├── openai.rs     # OpenAI (GPT) client
+│   │   ├── ollama.rs     # Ollama (local models) client
+│   │   ├── mock.rs       # Mock client for testing
+│   │   └── factory.rs    # Client factory based on config
+│   ├── planning/
+│   │   └── mod.rs        # Planning Agent implementation
+│   ├── ralph/
+│   │   └── mod.rs        # Ralph Loop execution engine
+│   ├── security/
+│   │   ├── mod.rs        # Security validator for paths/commands
+│   │   └── permission.rs # Permission handling (CLI prompts)
+│   ├── tools/
+│   │   ├── mod.rs        # Tool trait and registry
+│   │   ├── file.rs       # read_file, write_file, list_files tools
+│   │   ├── shell.rs      # run_command tool
+│   │   ├── signal.rs     # signal_completion tool
+│   │   ├── factory.rs    # Tool registry factory
+│   │   └── permission_check.rs  # File permission checking
+│   └── tui/
+│       ├── mod.rs        # TUI module exports and terminal setup
+│       ├── app.rs        # Application state and event handling
+│       ├── ui.rs         # UI rendering logic
+│       ├── messages.rs   # Agent-TUI message channel
+│       ├── views/        # View components (spec list, detail, etc.)
+│       └── widgets/      # Reusable TUI widgets
 ├── specs/                # Default directory for specifications
+├── tests/                # Integration tests
 ├── Cargo.toml           # Package manifest
 └── rustagent.toml       # Configuration file (create from example)
 ```
@@ -395,8 +492,10 @@ Rustagent follows a modular architecture:
 
 - **Config System**: Multi-provider LLM configuration with environment variable support
 - **LLM Clients**: Abstracted clients for different LLM providers (streaming support)
-- **Tool System**: Trait-based tool implementation with dynamic registry
+- **Tool System**: Trait-based tool implementation with dynamic registry (`Arc<RwLock>` for thread safety)
+- **Security Layer**: Path and command validation with interactive permission prompts
 - **Spec Management**: JSON persistence layer for task tracking and learning
+- **TUI**: ratatui-based terminal interface with async agent communication via channels
 - **Agents**: Planning Agent and Ralph Loop for two-phase execution
 
 ## Examples
