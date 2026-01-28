@@ -1,6 +1,6 @@
 use crate::llm::error::LlmError;
-use reqwest::header::RETRY_AFTER;
 use reqwest::Response as HttpResponse;
+use reqwest::header::RETRY_AFTER;
 use std::time::{Duration, SystemTime};
 use tokio::time::sleep;
 use tracing::{debug, warn};
@@ -133,10 +133,7 @@ fn parse_http_date(value: &str) -> Option<Duration> {
         return None;
     }
 
-    let formats = [
-        "%a, %d %b %Y %H:%M:%S GMT",
-        "%A, %d-%b-%y %H:%M:%S GMT",
-    ];
+    let formats = ["%a, %d %b %Y %H:%M:%S GMT", "%A, %d-%b-%y %H:%M:%S GMT"];
 
     for fmt in &formats {
         if let Ok(naive) = NaiveDateTime::parse_from_str(value, fmt) {

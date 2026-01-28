@@ -1,5 +1,5 @@
 use super::error::LlmError;
-use super::retry::{parse_retry_after_header, parse_retry_from_message, with_retry, RetryConfig};
+use super::retry::{RetryConfig, parse_retry_after_header, parse_retry_from_message, with_retry};
 use super::{LlmClient, Message, Response, ResponseContent, Role, ToolCall, ToolDefinition};
 use async_trait::async_trait;
 use reqwest::Client;

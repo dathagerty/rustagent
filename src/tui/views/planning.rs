@@ -1,9 +1,9 @@
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph, Wrap},
-    Frame,
 };
 use tui_textarea::TextArea;
 
@@ -150,9 +150,7 @@ pub fn draw_planning(frame: &mut Frame, area: Rect, state: &mut PlanningState, s
 }
 
 fn draw_chat_history(frame: &mut Frame, area: Rect, state: &mut PlanningState, spinner_char: char) {
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .title(" Chat ");
+    let block = Block::default().borders(Borders::ALL).title(" Chat ");
 
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -262,8 +260,8 @@ fn draw_chat_history(frame: &mut Frame, area: Rect, state: &mut PlanningState, s
             1,
         );
 
-        let indicator_widget = Paragraph::new(indicator)
-            .style(Style::default().bg(Color::DarkGray).fg(Color::White));
+        let indicator_widget =
+            Paragraph::new(indicator).style(Style::default().bg(Color::DarkGray).fg(Color::White));
 
         frame.render_widget(indicator_widget, indicator_area);
     }

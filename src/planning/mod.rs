@@ -123,7 +123,8 @@ impl PlanningAgent {
                         tx.send(AgentMessage::PlanningToolCall {
                             name: tool_call.name.clone(),
                             args: tool_call.parameters.to_string(),
-                        }).await?;
+                        })
+                        .await?;
 
                         let tool = self
                             .registry
@@ -140,17 +141,18 @@ impl PlanningAgent {
                         tx.send(AgentMessage::PlanningToolResult {
                             name: tool_call.name.clone(),
                             output: output.clone(),
-                        }).await?;
+                        })
+                        .await?;
 
-                        // Detect spec file creation
-                        if tool_call.name == "write_file" {
-                            if let Some(path) = tool_call.parameters.get("path").and_then(|p| p.as_str()) {
-                                if path.ends_with("spec.json") || path.ends_with(".json") {
-                                    tx.send(AgentMessage::PlanningComplete {
-                                        spec_path: path.to_string(),
-                                    }).await?;
-                                }
-                            }
+                        if tool_call.name == "write_file"
+                            && let Some(path) =
+                                tool_call.parameters.get("path").and_then(|p| p.as_str())
+                            && (path.ends_with("spec.json") || path.ends_with(".json"))
+                        {
+                            tx.send(AgentMessage::PlanningComplete {
+                                spec_path: path.to_string(),
+                            })
+                            .await?;
                         }
 
                         self.conversation.push(Message::user(format!(

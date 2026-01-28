@@ -4,23 +4,20 @@ mod ui;
 pub mod views;
 pub mod widgets;
 
-pub use messages::{agent_channel, AgentMessage, AgentReceiver, AgentSender};
+pub use messages::{AgentMessage, AgentReceiver, AgentSender, agent_channel};
 
-pub use app::{App, ActiveTab};
+pub use app::{ActiveTab, App};
 pub use ui::draw;
 
+use crossterm::{
+    event::{self, Event, KeyEventKind},
+    execute,
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+};
+use ratatui::{Terminal, backend::CrosstermBackend};
 use std::io;
 use std::panic;
 use std::time::Duration;
-use crossterm::{
-    execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-    event::{self, Event, KeyEventKind},
-};
-use ratatui::{
-    backend::CrosstermBackend,
-    Terminal,
-};
 use tokio::sync::mpsc::Receiver;
 
 pub type Tui = Terminal<CrosstermBackend<io::Stdout>>;

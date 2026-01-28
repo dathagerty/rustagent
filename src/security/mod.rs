@@ -1,7 +1,7 @@
 use crate::config::{SecurityConfig, ShellPolicy};
 use anyhow::{Result, anyhow};
 use regex::Regex;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 pub mod permission;
 
@@ -80,25 +80,18 @@ impl SecurityValidator {
     }
 
     pub fn validate_file_path(&self, path: &Path) -> ValidationResult {
-        // Canonicalize the requested path
+        let path_str = path.to_string_lossy();
+        let expanded = shellexpand::tilde(&path_str);
+        let path = PathBuf::from(expanded.as_ref());
+
         let canonical = match path.canonicalize() {
             Ok(p) => p,
-            Err(_) => {
-                // Path doesn't exist yet, try to canonicalize parent
-                if let Some(parent) = path.parent() {
-                    match parent.canonicalize() {
-                        Ok(p) => p.join(path.file_name().unwrap()),
-                        Err(_) => {
-                            return ValidationResult::Denied("Cannot resolve path".to_string());
-                        }
-                    }
-                } else {
-                    return ValidationResult::Denied("Invalid path".to_string());
-                }
-            }
+            Err(_) => match resolve_nonexistent_path(&path) {
+                Ok(p) => p,
+                Err(reason) => return ValidationResult::Denied(reason),
+            },
         };
 
-        // Check if path is within allowed paths
         for allowed in &self.allowed_paths_canonical {
             if canonical.starts_with(allowed) {
                 return ValidationResult::Allowed;
@@ -127,4 +120,50 @@ impl SecurityValidator {
             Err(e) => ValidationResult::Denied(format!("Cannot check file size: {}", e)),
         }
     }
+}
+
+fn resolve_nonexistent_path(path: &Path) -> Result<PathBuf, String> {
+    let components: Vec<Component> = path.components().collect();
+
+    for i in (0..=components.len()).rev() {
+        let ancestor: PathBuf = components[..i].iter().collect();
+
+        if ancestor.as_os_str().is_empty() {
+            if let Ok(canonical) = std::env::current_dir() {
+                let suffix = &components[i..];
+                return validate_and_build_path(canonical, suffix);
+            }
+            continue;
+        }
+
+        if let Ok(canonical) = ancestor.canonicalize() {
+            let suffix = &components[i..];
+            return validate_and_build_path(canonical, suffix);
+        }
+    }
+
+    Err("cannot resolve path".to_string())
+}
+
+fn validate_and_build_path(base: PathBuf, suffix: &[Component]) -> Result<PathBuf, String> {
+    let mut resolved = base;
+
+    for component in suffix {
+        match component {
+            Component::ParentDir => {
+                return Err("path contains invalid traversal (..)".to_string());
+            }
+            Component::CurDir => {
+                continue;
+            }
+            Component::Normal(name) => {
+                resolved = resolved.join(name);
+            }
+            _ => {
+                return Err("invalid path component in suffix".to_string());
+            }
+        }
+    }
+
+    Ok(resolved)
 }

@@ -65,21 +65,39 @@ fn test_format_request_with_system_message() {
 }
 
 use reqwest::StatusCode;
-use rustagent::llm::error::{classify_status, ErrorKind};
+use rustagent::llm::error::{ErrorKind, classify_status};
 use rustagent::llm::retry::parse_retry_from_message;
 
 #[test]
 fn test_classify_status_retryable() {
-    assert_eq!(classify_status(StatusCode::TOO_MANY_REQUESTS), ErrorKind::RateLimited);
-    assert_eq!(classify_status(StatusCode::BAD_GATEWAY), ErrorKind::Transient);
-    assert_eq!(classify_status(StatusCode::SERVICE_UNAVAILABLE), ErrorKind::Transient);
-    assert_eq!(classify_status(StatusCode::GATEWAY_TIMEOUT), ErrorKind::Transient);
-    assert_eq!(classify_status(StatusCode::REQUEST_TIMEOUT), ErrorKind::Transient);
+    assert_eq!(
+        classify_status(StatusCode::TOO_MANY_REQUESTS),
+        ErrorKind::RateLimited
+    );
+    assert_eq!(
+        classify_status(StatusCode::BAD_GATEWAY),
+        ErrorKind::Transient
+    );
+    assert_eq!(
+        classify_status(StatusCode::SERVICE_UNAVAILABLE),
+        ErrorKind::Transient
+    );
+    assert_eq!(
+        classify_status(StatusCode::GATEWAY_TIMEOUT),
+        ErrorKind::Transient
+    );
+    assert_eq!(
+        classify_status(StatusCode::REQUEST_TIMEOUT),
+        ErrorKind::Transient
+    );
 }
 
 #[test]
 fn test_classify_status_non_retryable() {
-    assert_eq!(classify_status(StatusCode::BAD_REQUEST), ErrorKind::BadRequest);
+    assert_eq!(
+        classify_status(StatusCode::BAD_REQUEST),
+        ErrorKind::BadRequest
+    );
     assert_eq!(classify_status(StatusCode::UNAUTHORIZED), ErrorKind::Auth);
     assert_eq!(classify_status(StatusCode::FORBIDDEN), ErrorKind::Auth);
 }

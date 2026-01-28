@@ -1,22 +1,22 @@
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout},
     style::{Color, Style},
     text::{Line, Span},
     widgets::Paragraph,
-    Frame,
 };
 
-use crate::tui::{App, ActiveTab};
 use crate::tui::views::{draw_dashboard, draw_execution, draw_planning};
-use crate::tui::widgets::{draw_help, draw_side_panel, TabBar};
+use crate::tui::widgets::{TabBar, draw_help, draw_side_panel};
+use crate::tui::{ActiveTab, App};
 
 pub fn draw(frame: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(1),  // Tab bar
-            Constraint::Min(0),     // Main content
-            Constraint::Length(1),  // Status bar
+            Constraint::Length(1), // Tab bar
+            Constraint::Min(0),    // Main content
+            Constraint::Length(1), // Status bar
         ])
         .split(frame.area());
 
@@ -45,10 +45,9 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     }
 
     // Status bar
-    let status = Line::from(vec![
-        Span::raw(" q quit │ 1/2/3 switch tabs │ Tab cycle │ ? help "),
-    ]);
-    let status_bar = Paragraph::new(status)
-        .style(Style::default().bg(Color::DarkGray));
+    let status = Line::from(vec![Span::raw(
+        " q quit │ 1/2/3 switch tabs │ Tab cycle │ ? help ",
+    )]);
+    let status_bar = Paragraph::new(status).style(Style::default().bg(Color::DarkGray));
     frame.render_widget(status_bar, chunks[2]);
 }

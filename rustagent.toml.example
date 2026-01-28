@@ -1,13 +1,27 @@
 # Rustagent Configuration
 # Copy this file to rustagent.toml and fill in your API keys
+#
+# Configuration is loaded from (in order):
+#   1. ./rustagent.toml (current directory)
+#   2. ~/.config/rustagent/config.toml (XDG config)
+#   3. ~/.rustagent/config.toml (home directory)
 
-# Default LLM configuration (fallback for all modes)
+# =============================================================================
+# LLM Configuration (Required)
+# =============================================================================
+# Default LLM settings used by both planning and ralph modes unless overridden.
+
 [llm]
 provider = "anthropic"  # Options: "anthropic", "openai", "ollama"
 model = "claude-sonnet-4-20250514"
-max_tokens = 8192
+max_tokens = 8192       # Maximum tokens per response (default: 8192)
 
-# Provider-specific configuration
+# =============================================================================
+# Provider Configuration
+# =============================================================================
+# Configure credentials for your chosen provider(s).
+# Environment variables are expanded using ${VAR_NAME} syntax.
+
 [anthropic]
 api_key = "${ANTHROPIC_API_KEY}"
 
@@ -17,27 +31,66 @@ api_key = "${OPENAI_API_KEY}"
 [ollama]
 base_url = "http://localhost:11434"
 
-# Optional: Override LLM for planning mode
+# =============================================================================
+# Mode-Specific LLM Overrides (Optional)
+# =============================================================================
+# Override the default LLM for specific modes. Useful for using a more capable
+# model for planning while using a faster model for execution.
+
+# Planning mode: generates execution plans from specifications
 # [planning.llm]
 # provider = "anthropic"
 # model = "claude-opus-4-20250514"
 # max_tokens = 16384
 
-# Optional: Override LLM for ralph mode
+# Ralph mode: executes tasks using the Ralph Loop
 # [ralph.llm]
 # provider = "anthropic"
 # model = "claude-sonnet-4-20250514"
 # max_tokens = 4096
 
-# Agent configuration
-[rustagent]
-spec_dir = "specs"
-max_iterations = 100  # Set to null for unlimited
+# =============================================================================
+# Agent Configuration (Required)
+# =============================================================================
 
-# Security configuration
+[rustagent]
+spec_dir = "specs"      # Directory for specification files
+max_iterations = 100    # Max Ralph Loop iterations (omit or set null for unlimited)
+
+# =============================================================================
+# Security Configuration (Optional)
+# =============================================================================
+# Controls what operations the agent can perform. All settings have safe defaults.
+
 [security]
-shell_policy = "allowlist"  # Options: "allowlist", "blocklist", "unrestricted"
-allowed_commands = ["git", "cargo", "npm", "ls", "cat", "grep", "find", "echo", "pwd", "mkdir", "touch"]
+# Shell command policy:
+#   - "allowlist": Only commands in allowed_commands can run (default, safest)
+#   - "blocklist": All commands except those matching blocked_patterns can run
+#   - "unrestricted": All commands can run (use with caution)
+shell_policy = "allowlist"
+
+# Commands allowed when shell_policy = "allowlist"
+allowed_commands = [
+    "git",
+    "cargo",
+    "npm",
+    "ls",
+    "cat",
+    "grep",
+    "find",
+    "echo",
+    "pwd",
+    "mkdir",
+    "touch"
+]
+
+# Regex patterns to block when shell_policy = "blocklist"
+# Example: ["rm\\s+-rf", "sudo", "curl.*\\|.*sh"]
 blocked_patterns = []
+
+# Maximum file size the agent can write (in MB)
 max_file_size_mb = 10
+
+# Paths the agent can access (relative to working directory or absolute)
+# Use "." for current directory and subdirectories
 allowed_paths = ["."]

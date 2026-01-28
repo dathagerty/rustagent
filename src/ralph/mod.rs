@@ -144,16 +144,19 @@ impl RalphLoop {
     pub async fn run_with_sender(&self, tx: AgentSender) -> Result<()> {
         tx.send(AgentMessage::ExecutionStarted {
             spec_path: self.spec_path.clone(),
-        }).await?;
+        })
+        .await?;
 
         let mut iteration = 0;
 
         loop {
             iteration += 1;
             if iteration > self.max_iterations {
-                tx.send(AgentMessage::ExecutionError(
-                    format!("Reached max iterations ({})", self.max_iterations)
-                )).await?;
+                tx.send(AgentMessage::ExecutionError(format!(
+                    "Reached max iterations ({})",
+                    self.max_iterations
+                )))
+                .await?;
                 break;
             }
 
@@ -170,7 +173,8 @@ impl RalphLoop {
             tx.send(AgentMessage::TaskStarted {
                 task_id: task.id.clone(),
                 title: task.title.clone(),
-            }).await?;
+            })
+            .await?;
 
             // Mark task as in progress
             {
@@ -187,34 +191,36 @@ impl RalphLoop {
 
                     match signal.as_str() {
                         "TASK_COMPLETE" => {
-                            let task_mut = spec
-                                .find_task_mut(&task.id)
-                                .context("Task not found")?;
+                            let task_mut =
+                                spec.find_task_mut(&task.id).context("Task not found")?;
                             task_mut.status = TaskStatus::Complete;
                             task_mut.completed_at = Some(Utc::now());
                             spec.save(&self.spec_path)?;
-                            tx.send(AgentMessage::TaskComplete { task_id: task.id }).await?;
+                            tx.send(AgentMessage::TaskComplete { task_id: task.id })
+                                .await?;
                         }
                         "TASK_BLOCKED" => {
-                            let task_mut = spec
-                                .find_task_mut(&task.id)
-                                .context("Task not found")?;
+                            let task_mut =
+                                spec.find_task_mut(&task.id).context("Task not found")?;
                             task_mut.status = TaskStatus::Blocked;
                             spec.save(&self.spec_path)?;
                             tx.send(AgentMessage::TaskBlocked {
                                 task_id: task.id,
-                                reason: reason.unwrap_or_else(|| "Task reported blocked".to_string()),
-                            }).await?;
+                                reason: reason
+                                    .unwrap_or_else(|| "Task reported blocked".to_string()),
+                            })
+                            .await?;
                         }
                         _ => {
-                            let task_mut = spec
-                                .find_task_mut(&task.id)
-                                .context("Task not found")?;
+                            let task_mut =
+                                spec.find_task_mut(&task.id).context("Task not found")?;
                             task_mut.status = TaskStatus::Pending;
                             spec.save(&self.spec_path)?;
-                            tx.send(AgentMessage::TaskResponse(
-                                format!("Unknown signal '{}', resetting task to pending", signal)
-                            )).await?;
+                            tx.send(AgentMessage::TaskResponse(format!(
+                                "Unknown signal '{}', resetting task to pending",
+                                signal
+                            )))
+                            .await?;
                         }
                     }
                 }
@@ -270,7 +276,8 @@ impl RalphLoop {
                             if result.starts_with("SIGNAL:complete:") {
                                 return Ok(("TASK_COMPLETE".to_string(), None));
                             } else if result.starts_with("SIGNAL:blocked:") {
-                                let reason = result.strip_prefix("SIGNAL:blocked:")
+                                let reason = result
+                                    .strip_prefix("SIGNAL:blocked:")
                                     .map(|s| s.to_string());
                                 return Ok(("TASK_BLOCKED".to_string(), reason));
                             }
@@ -286,7 +293,8 @@ impl RalphLoop {
                         tx.send(AgentMessage::TaskToolCall {
                             name: tool_call.name.clone(),
                             args: tool_call.parameters.to_string(),
-                        }).await?;
+                        })
+                        .await?;
 
                         let tool = self.tools.get(&tool_call.name).context("Tool not found")?;
 
@@ -295,14 +303,17 @@ impl RalphLoop {
                                 tx.send(AgentMessage::TaskToolResult {
                                     name: tool_call.name.clone(),
                                     output: output.clone(),
-                                }).await?;
-                                results.push(format!("Tool: {}\nResult: {}", tool_call.name, output));
+                                })
+                                .await?;
+                                results
+                                    .push(format!("Tool: {}\nResult: {}", tool_call.name, output));
                             }
                             Err(e) => {
                                 tx.send(AgentMessage::TaskToolResult {
                                     name: tool_call.name.clone(),
                                     output: format!("Error: {}", e),
-                                }).await?;
+                                })
+                                .await?;
                                 results.push(format!("Tool: {}\nError: {}", tool_call.name, e));
                             }
                         }

@@ -1,9 +1,9 @@
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, Paragraph, Wrap},
-    Frame,
 };
 
 use crate::spec::{Task, TaskStatus};
@@ -118,7 +118,12 @@ impl Default for ExecutionState {
     }
 }
 
-pub fn draw_execution(frame: &mut Frame, area: Rect, state: &mut ExecutionState, spinner_char: char) {
+pub fn draw_execution(
+    frame: &mut Frame,
+    area: Rect,
+    state: &mut ExecutionState,
+    spinner_char: char,
+) {
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(35), Constraint::Percentage(65)])
@@ -300,8 +305,8 @@ fn draw_output_pane(frame: &mut Frame, area: Rect, state: &mut ExecutionState) {
             1,
         );
 
-        let indicator_widget = Paragraph::new(indicator)
-            .style(Style::default().bg(Color::DarkGray).fg(Color::White));
+        let indicator_widget =
+            Paragraph::new(indicator).style(Style::default().bg(Color::DarkGray).fg(Color::White));
 
         frame.render_widget(indicator_widget, indicator_area);
     }

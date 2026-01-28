@@ -88,12 +88,18 @@ impl App {
                             tokio::spawn(async move {
                                 match crate::planning::PlanningAgent::new(config, spec_dir) {
                                     Ok(mut agent) => {
-                                        if let Err(e) = agent.run_with_sender(tx.clone(), text).await {
-                                            let _ = tx.send(AgentMessage::PlanningError(e.to_string())).await;
+                                        if let Err(e) =
+                                            agent.run_with_sender(tx.clone(), text).await
+                                        {
+                                            let _ = tx
+                                                .send(AgentMessage::PlanningError(e.to_string()))
+                                                .await;
                                         }
                                     }
                                     Err(e) => {
-                                        let _ = tx.send(AgentMessage::PlanningError(e.to_string())).await;
+                                        let _ = tx
+                                            .send(AgentMessage::PlanningError(e.to_string()))
+                                            .await;
                                     }
                                 }
                             });
@@ -120,10 +126,14 @@ impl App {
                     ActiveTab::Execution => ActiveTab::Dashboard,
                 };
             }
-            (KeyCode::Char('K'), KeyModifiers::SHIFT) if self.active_tab == ActiveTab::Dashboard => {
+            (KeyCode::Char('K'), KeyModifiers::SHIFT)
+                if self.active_tab == ActiveTab::Dashboard =>
+            {
                 self.dashboard.mode = DashboardMode::Kanban;
             }
-            (KeyCode::Char('A'), KeyModifiers::SHIFT) if self.active_tab == ActiveTab::Dashboard => {
+            (KeyCode::Char('A'), KeyModifiers::SHIFT)
+                if self.active_tab == ActiveTab::Dashboard =>
+            {
                 self.dashboard.mode = DashboardMode::Activity;
             }
             (KeyCode::Up, KeyModifiers::NONE) | (KeyCode::Char('k'), KeyModifiers::NONE)
@@ -166,11 +176,14 @@ impl App {
                             match crate::ralph::RalphLoop::new(config, spec_path, None) {
                                 Ok(ralph) => {
                                     if let Err(e) = ralph.run_with_sender(tx.clone()).await {
-                                        let _ = tx.send(AgentMessage::ExecutionError(e.to_string())).await;
+                                        let _ = tx
+                                            .send(AgentMessage::ExecutionError(e.to_string()))
+                                            .await;
                                     }
                                 }
                                 Err(e) => {
-                                    let _ = tx.send(AgentMessage::ExecutionError(e.to_string())).await;
+                                    let _ =
+                                        tx.send(AgentMessage::ExecutionError(e.to_string())).await;
                                 }
                             }
                         });
@@ -225,27 +238,19 @@ impl App {
             {
                 self.execution.scroll_down(1);
             }
-            (KeyCode::PageUp, KeyModifiers::NONE)
-                if self.active_tab == ActiveTab::Execution =>
-            {
+            (KeyCode::PageUp, KeyModifiers::NONE) if self.active_tab == ActiveTab::Execution => {
                 let page_size = self.execution.viewport_height.saturating_sub(1).max(1);
                 self.execution.scroll_up(page_size);
             }
-            (KeyCode::PageDown, KeyModifiers::NONE)
-                if self.active_tab == ActiveTab::Execution =>
-            {
+            (KeyCode::PageDown, KeyModifiers::NONE) if self.active_tab == ActiveTab::Execution => {
                 let page_size = self.execution.viewport_height.saturating_sub(1).max(1);
                 self.execution.scroll_down(page_size);
             }
-            (KeyCode::Home, KeyModifiers::NONE)
-                if self.active_tab == ActiveTab::Execution =>
-            {
+            (KeyCode::Home, KeyModifiers::NONE) if self.active_tab == ActiveTab::Execution => {
                 self.execution.scroll_offset = 0;
                 self.execution.auto_scroll = false;
             }
-            (KeyCode::End, KeyModifiers::NONE)
-                if self.active_tab == ActiveTab::Execution =>
-            {
+            (KeyCode::End, KeyModifiers::NONE) if self.active_tab == ActiveTab::Execution => {
                 self.execution.scroll_to_bottom();
             }
             (KeyCode::Char('['), KeyModifiers::NONE) | (KeyCode::Char(']'), KeyModifiers::NONE) => {
@@ -274,10 +279,8 @@ impl App {
                 self.planning.add_message(MessageRole::Assistant, text);
             }
             AgentMessage::PlanningToolCall { name, args: _ } => {
-                self.planning.add_message(
-                    MessageRole::Assistant,
-                    format!("[Calling tool: {}]", name),
-                );
+                self.planning
+                    .add_message(MessageRole::Assistant, format!("[Calling tool: {}]", name));
             }
             AgentMessage::PlanningToolResult { name, output } => {
                 let preview = if output.len() > 100 {
@@ -300,10 +303,8 @@ impl App {
             }
             AgentMessage::PlanningError(err) => {
                 self.planning.thinking = false;
-                self.planning.add_message(
-                    MessageRole::Assistant,
-                    format!("Error: {}", err),
-                );
+                self.planning
+                    .add_message(MessageRole::Assistant, format!("Error: {}", err));
             }
 
             // Execution messages

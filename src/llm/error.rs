@@ -44,7 +44,11 @@ impl LlmError {
         }
     }
 
-    pub fn transient(provider: &'static str, status: Option<StatusCode>, raw: Option<String>) -> Self {
+    pub fn transient(
+        provider: &'static str,
+        status: Option<StatusCode>,
+        raw: Option<String>,
+    ) -> Self {
         Self {
             provider,
             kind: ErrorKind::Transient,

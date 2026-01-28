@@ -116,7 +116,12 @@ impl DashboardState {
     }
 
     pub fn selected_spec(&self) -> Option<&SpecSummary> {
-        let statuses = [SpecStatus::Draft, SpecStatus::Ready, SpecStatus::Running, SpecStatus::Completed];
+        let statuses = [
+            SpecStatus::Draft,
+            SpecStatus::Ready,
+            SpecStatus::Running,
+            SpecStatus::Completed,
+        ];
         let status = statuses.get(self.selected_column)?;
 
         self.specs
@@ -148,7 +153,12 @@ impl DashboardState {
     }
 
     fn specs_in_current_column(&self) -> Vec<&SpecSummary> {
-        let statuses = [SpecStatus::Draft, SpecStatus::Ready, SpecStatus::Running, SpecStatus::Completed];
+        let statuses = [
+            SpecStatus::Draft,
+            SpecStatus::Ready,
+            SpecStatus::Running,
+            SpecStatus::Completed,
+        ];
         if let Some(status) = statuses.get(self.selected_column) {
             self.specs.iter().filter(|s| s.status == *status).collect()
         } else {
@@ -174,18 +184,14 @@ impl Default for DashboardState {
 pub fn draw_dashboard(frame: &mut ratatui::Frame, area: Rect, state: &DashboardState) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(1),
-            Constraint::Min(0),
-        ])
+        .constraints([Constraint::Length(1), Constraint::Min(0)])
         .split(area);
 
     let mode_text = match state.mode {
         DashboardMode::Kanban => " View: [K]anban │ Activity ",
         DashboardMode::Activity => " View: Kanban │ [A]ctivity ",
     };
-    let mode_bar = Paragraph::new(mode_text)
-        .style(Style::default().fg(Color::Cyan));
+    let mode_bar = Paragraph::new(mode_text).style(Style::default().fg(Color::Cyan));
     frame.render_widget(mode_bar, chunks[0]);
 
     match state.mode {
@@ -206,9 +212,15 @@ fn draw_kanban(frame: &mut ratatui::Frame, area: Rect, state: &DashboardState) {
         .split(area);
 
     let column_titles = ["Draft", "Ready", "Running", "Completed"];
-    let statuses = [SpecStatus::Draft, SpecStatus::Ready, SpecStatus::Running, SpecStatus::Completed];
+    let statuses = [
+        SpecStatus::Draft,
+        SpecStatus::Ready,
+        SpecStatus::Running,
+        SpecStatus::Completed,
+    ];
 
-    for (i, (col_area, (title, status))) in columns.iter()
+    for (i, (col_area, (title, status))) in columns
+        .iter()
         .zip(column_titles.iter().zip(statuses.iter()))
         .enumerate()
     {
@@ -224,18 +236,21 @@ fn draw_kanban(frame: &mut ratatui::Frame, area: Rect, state: &DashboardState) {
             .title(*title)
             .border_style(style);
 
-        let specs_in_column: Vec<&SpecSummary> = state.specs
-            .iter()
-            .filter(|s| s.status == *status)
-            .collect();
+        let specs_in_column: Vec<&SpecSummary> =
+            state.specs.iter().filter(|s| s.status == *status).collect();
 
         let items: Vec<ListItem> = specs_in_column
             .iter()
             .enumerate()
             .map(|(j, spec)| {
-                let content = format!("{} ({}/{})", spec.name, spec.task_progress.0, spec.task_progress.1);
+                let content = format!(
+                    "{} ({}/{})",
+                    spec.name, spec.task_progress.0, spec.task_progress.1
+                );
                 let item_style = if is_selected && j == state.selected_row {
-                    Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD)
+                    Style::default()
+                        .bg(Color::DarkGray)
+                        .add_modifier(Modifier::BOLD)
                 } else {
                     Style::default()
                 };
@@ -256,9 +271,15 @@ fn draw_activity(frame: &mut ratatui::Frame, area: Rect, _state: &DashboardState
     let header = Line::from(vec![
         Span::styled("Time      ", Style::default().add_modifier(Modifier::BOLD)),
         Span::styled("│ ", Style::default().fg(Color::DarkGray)),
-        Span::styled("Event             ", Style::default().add_modifier(Modifier::BOLD)),
+        Span::styled(
+            "Event             ",
+            Style::default().add_modifier(Modifier::BOLD),
+        ),
         Span::styled("│ ", Style::default().fg(Color::DarkGray)),
-        Span::styled("Spec         ", Style::default().add_modifier(Modifier::BOLD)),
+        Span::styled(
+            "Spec         ",
+            Style::default().add_modifier(Modifier::BOLD),
+        ),
         Span::styled("│ ", Style::default().fg(Color::DarkGray)),
         Span::styled("Details", Style::default().add_modifier(Modifier::BOLD)),
     ]);

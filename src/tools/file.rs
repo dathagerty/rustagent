@@ -82,6 +82,7 @@ impl Tool for ReadFileTool {
 /// Tool for writing content to a file
 pub struct WriteFileTool {
     checker: FilePermissionChecker,
+    validator: Arc<SecurityValidator>,
 }
 
 impl WriteFileTool {
@@ -90,7 +91,8 @@ impl WriteFileTool {
         permission_handler: Arc<dyn PermissionHandler>,
     ) -> Self {
         Self {
-            checker: FilePermissionChecker::new(validator, permission_handler),
+            checker: FilePermissionChecker::new(validator.clone(), permission_handler),
+            validator,
         }
     }
 }
@@ -134,12 +136,23 @@ impl Tool for WriteFileTool {
         // Check permission
         self.checker.check_permission(path)?;
 
-        // Create parent directories if they don't exist
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).await.context(format!(
                 "Failed to create parent directories for: {}",
                 path.display()
             ))?;
+
+            let canonical_parent = parent.canonicalize().context(format!(
+                "Failed to resolve parent directory: {}",
+                parent.display()
+            ))?;
+            match self.validator.validate_file_path(&canonical_parent) {
+                ValidationResult::Allowed => {}
+                _ => anyhow::bail!(
+                    "Parent directory resolved outside allowed paths: {}",
+                    canonical_parent.display()
+                ),
+            }
         }
 
         fs::write(path, content)
