@@ -463,8 +463,11 @@ fn detect_node_changes(db_node: &GraphNode, toml_node: &TomlNode) -> Result<Vec<
     }
     // Check labels: both empty/None means no change
     let db_has_labels = !db_node.labels.is_empty();
-    let toml_has_labels = toml_node.labels.is_some() && !toml_node.labels.as_ref().unwrap().is_empty();
-    if db_has_labels != toml_has_labels || (db_has_labels && Some(&db_node.labels) != toml_node.labels.as_ref()) {
+    let toml_has_labels =
+        toml_node.labels.is_some() && !toml_node.labels.as_ref().unwrap().is_empty();
+    if db_has_labels != toml_has_labels
+        || (db_has_labels && Some(&db_node.labels) != toml_node.labels.as_ref())
+    {
         changed.push("labels".to_string());
     }
     if db_node.blocked_reason != toml_node.blocked_reason {

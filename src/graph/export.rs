@@ -74,7 +74,8 @@ async fn generate_adr_markdown(
 
     // Separate edges by type for efficient lookup
     let mut option_edges = Vec::new();
-    let mut status_edges_map: std::collections::HashMap<String, Vec<_>> = std::collections::HashMap::new();
+    let mut status_edges_map: std::collections::HashMap<String, Vec<_>> =
+        std::collections::HashMap::new();
 
     for (edge, node) in &all_edges {
         if edge.edge_type == crate::graph::EdgeType::LeadsTo {
