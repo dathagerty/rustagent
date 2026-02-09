@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::str::FromStr;
 
+pub mod decay;
 pub mod dependency;
 pub mod export;
 pub mod interchange;
