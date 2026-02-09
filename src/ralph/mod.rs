@@ -139,7 +139,6 @@ impl RalphLoop {
         Ok(())
     }
 
-
     async fn execute_task(&self, task_id: &str) -> Result<String> {
         let context = self.build_context(task_id)?;
         let tool_definitions = self.tools.definitions();

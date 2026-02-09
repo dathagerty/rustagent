@@ -5,21 +5,18 @@ const CURRENT_VERSION: u32 = 1;
 
 /// Run migrations to set up or upgrade the database schema
 pub async fn run_migrations(conn: &Connection) -> Result<()> {
-    conn.call(|c| {
-        check_and_migrate(c).map_err(|e| tokio_rusqlite::Error::Rusqlite(e))
-    })
-    .await
-    .map_err(|e| anyhow::anyhow!(e))?;
+    conn.call(|c| check_and_migrate(c).map_err(tokio_rusqlite::Error::Rusqlite))
+        .await
+        .map_err(|e| anyhow::anyhow!(e))?;
 
     Ok(())
 }
 
-/// Check schema version and apply migrations if needed
-fn check_and_migrate(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
+/// Check schema version and apply migrations if needed (exposed for testing)
+pub fn check_and_migrate(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
     // Check if schema_version table exists
-    let mut stmt = conn.prepare(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'",
-    )?;
+    let mut stmt = conn
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'")?;
 
     let exists = stmt.exists([])?;
 
@@ -43,7 +40,10 @@ fn check_and_migrate(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
         // Return an error to signal this condition
         return Err(rusqlite::Error::SqliteFailure(
             rusqlite::ffi::Error::new(1),
-            Some("database newer than binary".to_string()),
+            Some(
+                "your database was created by a newer version of rustagent, please upgrade"
+                    .to_string(),
+            ),
         ));
     }
 
@@ -54,6 +54,9 @@ fn check_and_migrate(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
 
 /// Create the initial database schema (version 1)
 fn create_schema_v1(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
+    // Wrap schema creation in a transaction for atomicity using BEGIN/COMMIT
+    conn.execute_batch("BEGIN IMMEDIATE")?;
+
     // Schema version table
     conn.execute(
         "CREATE TABLE schema_version (
@@ -65,10 +68,7 @@ fn create_schema_v1(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
 
     conn.execute(
         "INSERT INTO schema_version (version, migrated_at) VALUES (?, ?)",
-        [
-            "1",
-            &chrono::Utc::now().to_rfc3339(),
-        ],
+        ["1", &chrono::Utc::now().to_rfc3339()],
     )?;
 
     // Projects table
@@ -106,18 +106,9 @@ fn create_schema_v1(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
         [],
     )?;
 
-    conn.execute(
-        "CREATE INDEX idx_nodes_project ON nodes(project_id)",
-        [],
-    )?;
-    conn.execute(
-        "CREATE INDEX idx_nodes_type ON nodes(node_type)",
-        [],
-    )?;
-    conn.execute(
-        "CREATE INDEX idx_nodes_status ON nodes(status)",
-        [],
-    )?;
+    conn.execute("CREATE INDEX idx_nodes_project ON nodes(project_id)", [])?;
+    conn.execute("CREATE INDEX idx_nodes_type ON nodes(node_type)", [])?;
+    conn.execute("CREATE INDEX idx_nodes_status ON nodes(status)", [])?;
 
     // Edges table (unified relationships)
     conn.execute(
@@ -132,18 +123,9 @@ fn create_schema_v1(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
         [],
     )?;
 
-    conn.execute(
-        "CREATE INDEX idx_edges_from ON edges(from_node)",
-        [],
-    )?;
-    conn.execute(
-        "CREATE INDEX idx_edges_to ON edges(to_node)",
-        [],
-    )?;
-    conn.execute(
-        "CREATE INDEX idx_edges_type ON edges(edge_type)",
-        [],
-    )?;
+    conn.execute("CREATE INDEX idx_edges_from ON edges(from_node)", [])?;
+    conn.execute("CREATE INDEX idx_edges_to ON edges(to_node)", [])?;
+    conn.execute("CREATE INDEX idx_edges_type ON edges(edge_type)", [])?;
 
     // Sessions table (temporal)
     conn.execute(
@@ -214,5 +196,6 @@ fn create_schema_v1(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
         [],
     )?;
 
+    conn.execute_batch("COMMIT")?;
     Ok(())
 }

@@ -40,9 +40,8 @@ impl ProjectStore {
         let result = db
             .connection()
             .call(move |conn| {
-                let tx = conn.transaction_with_behavior(
-                    rusqlite::TransactionBehavior::Immediate,
-                )?;
+                let tx =
+                    conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
 
                 let id = generate_project_id();
                 let now = Utc::now();
@@ -187,12 +186,11 @@ impl ProjectStore {
                     if project.path == path_buf {
                         return Ok(Some(project));
                     }
-                    if let Ok(canonical_stored) = project.path.canonicalize() {
-                        if let Some(ref canonical_query) = canonical_query {
-                            if canonical_stored == *canonical_query {
-                                return Ok(Some(project));
-                            }
-                        }
+                    if let Ok(canonical_stored) = project.path.canonicalize()
+                        && let Some(ref canonical_query_ref) = canonical_query
+                        && canonical_stored == *canonical_query_ref
+                    {
+                        return Ok(Some(project));
                     }
                 }
                 Ok(None)
@@ -212,12 +210,13 @@ impl ProjectStore {
         let result = db
             .connection()
             .call(move |conn| {
-                let tx = conn.transaction_with_behavior(
-                    rusqlite::TransactionBehavior::Immediate,
-                )?;
+                let tx =
+                    conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
 
-                let rows_affected =
-                    tx.execute("DELETE FROM projects WHERE name = ?", rusqlite::params![&name])?;
+                let rows_affected = tx.execute(
+                    "DELETE FROM projects WHERE name = ?",
+                    rusqlite::params![&name],
+                )?;
 
                 tx.commit()?;
 

@@ -34,9 +34,7 @@ async fn test_add_duplicate_name_fails() {
         .await
         .expect("first add should succeed");
 
-    let result = store
-        .add("my-api", Path::new("/tmp/test2"))
-        .await;
+    let result = store.add("my-api", Path::new("/tmp/test2")).await;
 
     assert!(result.is_err(), "adding duplicate name should fail");
 }

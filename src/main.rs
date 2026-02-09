@@ -1,6 +1,6 @@
-use rustagent::{config, logging, planning, ralph, project, db};
+use rustagent::{config, db, logging, planning, project, ralph};
 
-use clap::{Parser, Subcommand, CommandFactory};
+use clap::{CommandFactory, Parser, Subcommand};
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -197,9 +197,15 @@ async fn main() -> anyhow::Result<()> {
 
             match action {
                 ProjectAction::Add { name, path } => {
-                    let proj = store.add(&name, std::path::Path::new(&path)).await?;
-                    println!("Registered project '{}' ({}) at {}",
-                             proj.name, proj.id, proj.path.display());
+                    let path_obj = std::path::Path::new(&path);
+                    let canonical_path = path_obj.canonicalize()?;
+                    let proj = store.add(&name, &canonical_path).await?;
+                    println!(
+                        "Registered project '{}' ({}) at {}",
+                        proj.name,
+                        proj.id,
+                        proj.path.display()
+                    );
                 }
                 ProjectAction::List => {
                     let projects = store.list().await?;
@@ -219,29 +225,25 @@ async fn main() -> anyhow::Result<()> {
                         }
                     }
                 }
-                ProjectAction::Show { name } => {
-                    match store.get_by_name(&name).await? {
-                        Some(proj) => {
-                            println!("Project: {}", proj.name);
-                            println!("  ID: {}", proj.id);
-                            println!("  Path: {}", proj.path.display());
-                            println!("  Registered: {}", proj.registered_at);
-                        }
-                        None => {
-                            println!("Project '{}' not found", name);
-                        }
+                ProjectAction::Show { name } => match store.get_by_name(&name).await? {
+                    Some(proj) => {
+                        println!("Project: {}", proj.name);
+                        println!("  ID: {}", proj.id);
+                        println!("  Path: {}", proj.path.display());
+                        println!("  Registered: {}", proj.registered_at);
                     }
-                }
-                ProjectAction::Remove { name } => {
-                    match store.remove(&name).await? {
-                        true => {
-                            println!("Removed project '{}'", name);
-                        }
-                        false => {
-                            println!("Project '{}' not found", name);
-                        }
+                    None => {
+                        println!("Project '{}' not found", name);
                     }
-                }
+                },
+                ProjectAction::Remove { name } => match store.remove(&name).await? {
+                    true => {
+                        println!("Removed project '{}'", name);
+                    }
+                    false => {
+                        println!("Project '{}' not found", name);
+                    }
+                },
             }
         }
     }

@@ -67,9 +67,8 @@ async fn test_database_schema_tables_exist() {
     let conn = db.connection();
     let tables = conn
         .call(|c| {
-            let mut stmt = c.prepare(
-                "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name",
-            )?;
+            let mut stmt =
+                c.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")?;
             let tables = stmt
                 .query_map([], |row| row.get::<_, String>(0))?
                 .collect::<Result<Vec<String>, _>>()?;
@@ -124,10 +123,7 @@ async fn test_projects_table_has_correct_schema() {
             let mut stmt = c.prepare("PRAGMA table_info(projects)")?;
             let cols = stmt
                 .query_map([], |row| {
-                    Ok((
-                        row.get::<_, String>(1)?,
-                        row.get::<_, String>(2)?,
-                    ))
+                    Ok((row.get::<_, String>(1)?, row.get::<_, String>(2)?))
                 })?
                 .collect::<Result<Vec<_>, _>>()?;
             Ok(cols)
@@ -135,7 +131,14 @@ async fn test_projects_table_has_correct_schema() {
         .await
         .unwrap();
 
-    let expected_cols = vec!["id", "name", "path", "registered_at", "config_overrides", "metadata"];
+    let expected_cols = vec![
+        "id",
+        "name",
+        "path",
+        "registered_at",
+        "config_overrides",
+        "metadata",
+    ];
 
     for (col_name, _) in columns {
         assert!(
@@ -215,9 +218,8 @@ async fn test_triggers_exist() {
     let conn = db.connection();
     let triggers = conn
         .call(|c| {
-            let mut stmt = c.prepare(
-                "SELECT name FROM sqlite_master WHERE type='trigger' ORDER BY name",
-            )?;
+            let mut stmt =
+                c.prepare("SELECT name FROM sqlite_master WHERE type='trigger' ORDER BY name")?;
             let triggers = stmt
                 .query_map([], |row| row.get::<_, String>(0))?
                 .collect::<Result<Vec<_>, _>>()?;
@@ -315,4 +317,33 @@ async fn test_indexes_exist() {
             expected
         );
     }
+}
+
+#[tokio::test]
+async fn test_newer_database_version_error() {
+    let db = Database::open_in_memory().await.unwrap();
+
+    // Manually set version to 999 to simulate a newer database
+    let conn = db.connection();
+    conn.call(|c| {
+        c.execute("UPDATE schema_version SET version = 999", [])?;
+        Ok(())
+    })
+    .await
+    .unwrap();
+
+    // Now try to run migrations again - should fail with error containing "newer"
+    let result = conn
+        .call(|c| {
+            rustagent::db::migrations::check_and_migrate(c).map_err(tokio_rusqlite::Error::Rusqlite)
+        })
+        .await;
+
+    assert!(result.is_err(), "Expected error for newer database version");
+    let error_msg = result.unwrap_err().to_string();
+    assert!(
+        error_msg.contains("newer"),
+        "Error message should contain 'newer', got: {}",
+        error_msg
+    );
 }
