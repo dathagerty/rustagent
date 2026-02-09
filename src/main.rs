@@ -1,4 +1,4 @@
-use rustagent::{config, logging, planning, ralph};
+use rustagent::{config, logging, planning, ralph, project, db};
 
 use clap::{Parser, Subcommand, CommandFactory};
 use std::path::PathBuf;
@@ -7,6 +7,10 @@ use std::path::PathBuf;
 #[command(name = "rustagent")]
 #[command(about = "A Rust-based AI agent for task execution", long_about = None)]
 struct Cli {
+    /// Project name (if omitted, resolves from current directory)
+    #[arg(long, global = true)]
+    project: Option<String>,
+
     #[command(subcommand)]
     command: Option<Commands>,
 }
@@ -32,6 +36,34 @@ enum Commands {
         /// Maximum number of iterations
         #[arg(long)]
         max_iterations: Option<usize>,
+    },
+    /// Manage projects
+    Project {
+        #[command(subcommand)]
+        action: ProjectAction,
+    },
+}
+
+#[derive(Subcommand)]
+enum ProjectAction {
+    /// Register a project
+    Add {
+        /// Friendly name for the project
+        name: String,
+        /// Path to the project directory
+        path: String,
+    },
+    /// List all registered projects
+    List,
+    /// Show project details
+    Show {
+        /// Project name
+        name: String,
+    },
+    /// Remove a registered project
+    Remove {
+        /// Project name
+        name: String,
     },
 }
 
@@ -62,6 +94,33 @@ fn find_config_path() -> anyhow::Result<PathBuf> {
     anyhow::bail!(
         "Config file not found. Please create rustagent.toml in current directory or ~/.rustagent/config.toml"
     )
+}
+
+/// Get the database path in XDG data directory
+fn db_path() -> anyhow::Result<PathBuf> {
+    let data_dir = dirs::data_dir()
+        .ok_or_else(|| anyhow::anyhow!("Could not determine XDG data directory"))?;
+    let db_dir = data_dir.join("rustagent");
+    std::fs::create_dir_all(&db_dir)?;
+    Ok(db_dir.join("rustagent.db"))
+}
+
+/// Resolve project from --project flag or current working directory
+#[allow(dead_code)]
+async fn resolve_project(
+    db: &db::Database,
+    project_name: Option<&str>,
+) -> anyhow::Result<Option<project::Project>> {
+    let store = project::ProjectStore::new(db.clone());
+
+    if let Some(name) = project_name {
+        // Look up by name
+        store.get_by_name(name).await
+    } else {
+        // Look up by current working directory
+        let cwd = std::env::current_dir()?;
+        store.get_by_path(&cwd).await
+    }
 }
 
 #[tokio::main]
@@ -129,6 +188,61 @@ async fn main() -> anyhow::Result<()> {
             // Create and run Ralph loop
             let ralph = ralph::RalphLoop::new(config, spec_file.clone(), max_iterations)?;
             ralph.run().await?;
+        }
+        Commands::Project { action } => {
+            // Open database
+            let db_path = db_path()?;
+            let database = db::Database::open(&db_path).await?;
+            let store = project::ProjectStore::new(database);
+
+            match action {
+                ProjectAction::Add { name, path } => {
+                    let proj = store.add(&name, std::path::Path::new(&path)).await?;
+                    println!("Registered project '{}' ({}) at {}",
+                             proj.name, proj.id, proj.path.display());
+                }
+                ProjectAction::List => {
+                    let projects = store.list().await?;
+                    if projects.is_empty() {
+                        println!("No projects registered");
+                    } else {
+                        println!("{:<20} {:<10} {:<40}", "Name", "ID", "Path");
+                        println!("{}", "=".repeat(70));
+                        for proj in projects {
+                            let path_str = proj.path.display().to_string();
+                            let path_display = if path_str.len() > 40 {
+                                format!("{}...", &path_str[..37])
+                            } else {
+                                path_str
+                            };
+                            println!("{:<20} {:<10} {:<40}", proj.name, proj.id, path_display);
+                        }
+                    }
+                }
+                ProjectAction::Show { name } => {
+                    match store.get_by_name(&name).await? {
+                        Some(proj) => {
+                            println!("Project: {}", proj.name);
+                            println!("  ID: {}", proj.id);
+                            println!("  Path: {}", proj.path.display());
+                            println!("  Registered: {}", proj.registered_at);
+                        }
+                        None => {
+                            println!("Project '{}' not found", name);
+                        }
+                    }
+                }
+                ProjectAction::Remove { name } => {
+                    match store.remove(&name).await? {
+                        true => {
+                            println!("Removed project '{}'", name);
+                        }
+                        false => {
+                            println!("Project '{}' not found", name);
+                        }
+                    }
+                }
+            }
         }
     }
 
