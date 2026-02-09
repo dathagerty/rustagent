@@ -186,7 +186,10 @@ async fn test_p1d_ac4_3_token_budget_warning() {
         }
         AgentOutcome::TokenBudgetExhausted { tokens_used, .. } => {
             // Also valid - token budget was exhausted after reaching warning threshold
-            assert!(tokens_used >= 800, "Expected to reach at least 80% threshold");
+            assert!(
+                tokens_used >= 800,
+                "Expected to reach at least 80% threshold"
+            );
         }
         _ => panic!("Unexpected outcome: {:?}", outcome),
     }
