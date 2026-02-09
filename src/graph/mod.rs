@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 pub mod dependency;
+pub mod session;
 pub mod store;
 
 /// Node type in the work graph
