@@ -3,8 +3,15 @@ use rustagent::graph::store::{GraphStore, SqliteGraphStore};
 use rustagent::graph::{EdgeType, NodeStatus, NodeType};
 use rustagent::tools::Tool;
 use rustagent::tools::graph_tools::*;
+use rustagent::tools::factory::create_v2_registry;
+use rustagent::security::SecurityValidator;
+use rustagent::security::permission::AutoApproveHandler;
+use rustagent::config::SecurityConfig;
 use serde_json::{Value, json};
 use std::sync::Arc;
+
+mod common;
+use common::MockGraphStore;
 
 /// Create a test database in memory with a test project
 async fn setup_test_db() -> anyhow::Result<(Database, Arc<SqliteGraphStore>)> {
@@ -636,4 +643,61 @@ async fn test_tool_name_and_description() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+#[test]
+fn test_v2_registry_includes_all_tools() {
+    // Create a mock graph store
+    let graph_store = Arc::new(MockGraphStore);
+
+    // Create security config and validator
+    let security_config = SecurityConfig {
+        shell_policy: rustagent::config::ShellPolicy::Blocklist,
+        allowed_commands: vec![],
+        blocked_patterns: vec![],
+        max_file_size_mb: 100,
+        allowed_paths: vec![],
+    };
+    let validator = Arc::new(SecurityValidator::new(security_config).expect("Failed to create validator"));
+    let permission_handler = Arc::new(AutoApproveHandler);
+
+    // Create the v2 registry
+    let registry = create_v2_registry(validator, permission_handler, graph_store);
+
+    // Expected tool names: graph tools + legacy tools + context tools
+    let expected_tools = vec![
+        // Graph tools
+        "create_node",
+        "update_node",
+        "add_edge",
+        "query_nodes",
+        "search_nodes",
+        "claim_task",
+        "log_decision",
+        "choose_option",
+        "record_outcome",
+        "record_observation",
+        "revisit",
+        // Legacy tools
+        "read_file",
+        "write_file",
+        "list_files",
+        "run_command",
+        "signal_completion",
+        // Context tools
+        "read_agents_md",
+    ];
+
+    // Get all registered tool names
+    let registered_names = registry.list();
+
+    // Verify each expected tool is registered
+    for expected in expected_tools {
+        assert!(
+            registered_names.contains(&expected.to_string()),
+            "Tool '{}' not found in v2 registry. Registered tools: {:?}",
+            expected,
+            registered_names
+        );
+    }
 }

@@ -61,6 +61,23 @@ async fn test_database_pragma_foreign_keys() {
 }
 
 #[tokio::test]
+async fn test_database_pragma_busy_timeout() {
+    let db = Database::open_in_memory().await.unwrap();
+
+    let conn = db.connection();
+    let busy_timeout = conn
+        .call(|c| {
+            let mut stmt = c.prepare("PRAGMA busy_timeout")?;
+            let value: i32 = stmt.query_row([], |row| row.get::<_, i32>(0))?;
+            Ok(value)
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(busy_timeout, 5000);
+}
+
+#[tokio::test]
 async fn test_database_schema_tables_exist() {
     let db = Database::open_in_memory().await.unwrap();
 
