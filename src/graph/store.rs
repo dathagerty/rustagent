@@ -521,9 +521,9 @@ impl GraphStore for SqliteGraphStore {
                     "WITH RECURSIVE subtree AS (
                         SELECT id FROM nodes WHERE id = ?1
                         UNION ALL
-                        SELECT to_node FROM edges
-                        WHERE from_node IN (SELECT id FROM subtree)
-                          AND edge_type = 'contains'
+                        SELECT e.to_node FROM edges e
+                        JOIN subtree s ON e.from_node = s.id
+                        WHERE e.edge_type = 'contains'
                     )
                     SELECT id, project_id, node_type, title, description, status,
                            priority, assigned_to, created_by, blocked_reason,
@@ -556,9 +556,9 @@ impl GraphStore for SqliteGraphStore {
                     "WITH RECURSIVE subtree AS (
                         SELECT id FROM nodes WHERE id = ?1
                         UNION ALL
-                        SELECT to_node FROM edges
-                        WHERE from_node IN (SELECT id FROM subtree)
-                          AND edge_type = 'contains'
+                        SELECT e.to_node FROM edges e
+                        JOIN subtree s ON e.from_node = s.id
+                        WHERE e.edge_type = 'contains'
                     ),
                     ready_tasks AS (
                         SELECT id, priority FROM nodes
@@ -781,9 +781,9 @@ impl GraphStore for SqliteGraphStore {
                     "WITH RECURSIVE subtree AS (
                         SELECT id FROM nodes WHERE id = ?1
                         UNION ALL
-                        SELECT to_node FROM edges
-                        WHERE from_node IN (SELECT id FROM subtree)
-                          AND edge_type = 'contains'
+                        SELECT e.to_node FROM edges e
+                        JOIN subtree s ON e.from_node = s.id
+                        WHERE e.edge_type = 'contains'
                     )
                     SELECT id, project_id, node_type, title, description, status,
                            priority, assigned_to, created_by, blocked_reason,
@@ -845,9 +845,9 @@ impl GraphStore for SqliteGraphStore {
                     "WITH RECURSIVE node_tree AS (
                         SELECT id FROM nodes WHERE id = ?1
                         UNION ALL
-                        SELECT to_node FROM edges
-                        WHERE from_node IN (SELECT id FROM node_tree)
-                          AND edge_type = 'contains'
+                        SELECT e.to_node FROM edges e
+                        JOIN node_tree nt ON e.from_node = nt.id
+                        WHERE e.edge_type = 'contains'
                     )
                     SELECT id, project_id, node_type, title, description, status,
                            priority, assigned_to, created_by, blocked_reason,
@@ -861,14 +861,14 @@ impl GraphStore for SqliteGraphStore {
                     .query_map(rusqlite::params![&goal_id], Self::row_to_node)?
                     .collect::<Result<Vec<_>, _>>()?;
 
-                // Get all edges between nodes in the subtree (simple query without placeholders)
+                // Get all edges between nodes in the subtree
                 let mut stmt = conn.prepare(
                     "WITH RECURSIVE node_tree AS (
                         SELECT id FROM nodes WHERE id = ?1
                         UNION ALL
-                        SELECT to_node FROM edges
-                        WHERE from_node IN (SELECT id FROM node_tree)
-                          AND edge_type = 'contains'
+                        SELECT e.to_node FROM edges e
+                        JOIN node_tree nt ON e.from_node = nt.id
+                        WHERE e.edge_type = 'contains'
                     )
                     SELECT e.id, e.edge_type, e.from_node, e.to_node, e.label, e.created_at
                     FROM edges e
