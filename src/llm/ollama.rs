@@ -50,6 +50,10 @@ struct OllamaResponse {
     #[allow(dead_code)]
     done: bool,
     done_reason: Option<String>,
+    #[serde(default)]
+    prompt_eval_count: usize,
+    #[serde(default)]
+    eval_count: usize,
 }
 
 #[derive(Debug, Deserialize)]
@@ -181,6 +185,16 @@ impl OllamaClient {
         Ok(Response {
             content,
             stop_reason: ollama_response.done_reason,
+            input_tokens: if ollama_response.prompt_eval_count > 0 {
+                Some(ollama_response.prompt_eval_count)
+            } else {
+                None
+            },
+            output_tokens: if ollama_response.eval_count > 0 {
+                Some(ollama_response.eval_count)
+            } else {
+                None
+            },
         })
     }
 }

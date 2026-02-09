@@ -6,8 +6,9 @@ use std::sync::{Arc, Mutex};
 type RecordedCalls = Vec<(Vec<Message>, Vec<ToolDefinition>)>;
 
 pub struct MockLlmClient {
-    responses: Arc<Mutex<VecDeque<Response>>>,
+    responses: Arc<Mutex<VecDeque<(ResponseContent, Option<String>)>>>,
     recorded_calls: Arc<Mutex<RecordedCalls>>,
+    token_counts: Arc<Mutex<Option<(usize, usize)>>>, // (input_tokens, output_tokens)
 }
 
 impl MockLlmClient {
@@ -15,27 +16,30 @@ impl MockLlmClient {
         Self {
             responses: Arc::new(Mutex::new(VecDeque::new())),
             recorded_calls: Arc::new(Mutex::new(Vec::new())),
+            token_counts: Arc::new(Mutex::new(None)),
         }
     }
 
     pub fn queue_text_response(&self, text: &str) {
-        let response = Response {
-            content: ResponseContent::Text(text.to_string()),
-            stop_reason: Some("end_turn".to_string()),
-        };
-        self.responses.lock().unwrap().push_back(response);
+        self.responses.lock().unwrap().push_back((
+            ResponseContent::Text(text.to_string()),
+            Some("end_turn".to_string()),
+        ));
     }
 
     pub fn queue_tool_call(&self, name: &str, params: serde_json::Value) {
-        let response = Response {
-            content: ResponseContent::ToolCalls(vec![ToolCall {
+        self.responses.lock().unwrap().push_back((
+            ResponseContent::ToolCalls(vec![ToolCall {
                 id: format!("call_{}", uuid::Uuid::new_v4()),
                 name: name.to_string(),
                 parameters: params,
             }]),
-            stop_reason: Some("tool_use".to_string()),
-        };
-        self.responses.lock().unwrap().push_back(response);
+            Some("tool_use".to_string()),
+        ));
+    }
+
+    pub fn set_token_counts(&self, input: usize, output: usize) {
+        *self.token_counts.lock().unwrap() = Some((input, output));
     }
 
     pub fn get_recorded_calls(&self) -> Vec<(Vec<Message>, Vec<ToolDefinition>)> {
@@ -61,10 +65,20 @@ impl LlmClient for MockLlmClient {
             .unwrap()
             .push((messages, tools.to_vec()));
 
-        self.responses
+        let (content, stop_reason) = self
+            .responses
             .lock()
             .unwrap()
             .pop_front()
-            .ok_or_else(|| anyhow::anyhow!("No more mock responses queued"))
+            .ok_or_else(|| anyhow::anyhow!("No more mock responses queued"))?;
+
+        let token_counts = *self.token_counts.lock().unwrap();
+
+        Ok(Response {
+            content,
+            stop_reason,
+            input_tokens: token_counts.map(|(i, _)| i),
+            output_tokens: token_counts.map(|(_, o)| o),
+        })
     }
 }

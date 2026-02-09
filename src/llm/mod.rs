@@ -64,7 +64,7 @@ pub struct ToolDefinition {
 }
 
 /// A tool call requested by the LLM
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ToolCall {
     pub id: String,
     pub name: String,
@@ -79,7 +79,7 @@ pub struct ToolResult {
 }
 
 /// Content of a response from the LLM
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(untagged)]
 pub enum ResponseContent {
     Text(String),
@@ -91,6 +91,8 @@ pub enum ResponseContent {
 pub struct Response {
     pub content: ResponseContent,
     pub stop_reason: Option<String>,
+    pub input_tokens: Option<usize>,
+    pub output_tokens: Option<usize>,
 }
 
 /// Trait for LLM client implementations

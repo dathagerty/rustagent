@@ -46,6 +46,16 @@ struct AnthropicTool {
 struct AnthropicResponse {
     content: Vec<ContentBlock>,
     stop_reason: Option<String>,
+    #[serde(default)]
+    usage: UsageInfo,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct UsageInfo {
+    #[serde(default)]
+    input_tokens: usize,
+    #[serde(default)]
+    output_tokens: usize,
 }
 
 #[derive(Debug, Deserialize)]
@@ -191,6 +201,8 @@ impl AnthropicClient {
         Ok(Response {
             content,
             stop_reason: anthropic_response.stop_reason,
+            input_tokens: Some(anthropic_response.usage.input_tokens),
+            output_tokens: Some(anthropic_response.usage.output_tokens),
         })
     }
 }
