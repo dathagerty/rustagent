@@ -125,10 +125,10 @@ pub async fn export_goal(
     // Get all nodes in the goal's subtree
     let mut nodes_vec = graph_store.get_subtree(goal_id).await?;
     // Include the goal itself
-    if let Some(goal_node) = graph_store.get_node(goal_id).await? {
-        if !nodes_vec.iter().any(|n| n.id == goal_id) {
-            nodes_vec.insert(0, goal_node);
-        }
+    if let Some(goal_node) = graph_store.get_node(goal_id).await?
+        && !nodes_vec.iter().any(|n| n.id == goal_id)
+    {
+        nodes_vec.insert(0, goal_node);
     }
 
     // Get the full graph (nodes + edges)
@@ -253,7 +253,7 @@ pub async fn import_goal(
 
     // Process edges
     let mut node_ids_in_db = std::collections::HashSet::new();
-    for (node_id, _) in &goal_file.nodes {
+    for node_id in goal_file.nodes.keys() {
         if graph_store.get_node(node_id).await.is_ok() {
             node_ids_in_db.insert(node_id.clone());
         }
