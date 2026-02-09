@@ -1,5 +1,6 @@
 pub mod config;
 pub mod db;
+pub mod graph;
 pub mod llm;
 pub mod logging;
 pub mod planning;
