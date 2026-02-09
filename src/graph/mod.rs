@@ -6,6 +6,7 @@ use std::str::FromStr;
 
 pub mod dependency;
 pub mod export;
+pub mod interchange;
 pub mod session;
 pub mod store;
 
