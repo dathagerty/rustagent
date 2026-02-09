@@ -1,3 +1,4 @@
+use crate::context::ReadAgentsMdTool;
 use crate::graph::store::GraphStore;
 use crate::security::SecurityValidator;
 use crate::security::permission::PermissionHandler;
@@ -58,6 +59,9 @@ pub fn create_v2_registry(
     registry.register(Arc::new(RecordOutcomeTool::new(graph_store.clone())));
     registry.register(Arc::new(RecordObservationTool::new(graph_store.clone())));
     registry.register(Arc::new(RevisitTool::new(graph_store)));
+
+    // Register context tools
+    registry.register(Arc::new(ReadAgentsMdTool::new()));
 
     registry
 }
