@@ -1,11 +1,9 @@
 mod common;
 
 use anyhow::Result;
-use chrono::Utc;
 use common::{create_test_goal, create_test_observation, create_test_task, setup_test_env};
 use rustagent::graph::store::GraphStore;
 use rustagent::graph::*;
-use std::collections::HashMap;
 
 /// P1b.AC5.1: claim_task atomically sets status Ready->Claimed and assigned_to
 #[tokio::test]

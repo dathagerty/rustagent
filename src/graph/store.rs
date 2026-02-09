@@ -630,7 +630,7 @@ impl GraphStore for SqliteGraphStore {
                         rusqlite::params![&from_node_id],
                         |row| row.get(0),
                     )
-                    .map_err(|e| tokio_rusqlite::Error::Rusqlite(e))?;
+                    .map_err(tokio_rusqlite::Error::Rusqlite)?;
 
                 if !from_exists {
                     return Err(tokio_rusqlite::Error::Rusqlite(
@@ -647,7 +647,7 @@ impl GraphStore for SqliteGraphStore {
                         rusqlite::params![&to_node_id],
                         |row| row.get(0),
                     )
-                    .map_err(|e| tokio_rusqlite::Error::Rusqlite(e))?;
+                    .map_err(tokio_rusqlite::Error::Rusqlite)?;
 
                 if !to_exists {
                     return Err(tokio_rusqlite::Error::Rusqlite(
