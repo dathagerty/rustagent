@@ -91,8 +91,6 @@ enum TaskAction {
     List {
         #[arg(long)]
         status: Option<String>,
-        #[arg(long)]
-        priority: Option<String>,
     },
     /// Show ready tasks
     Ready,
@@ -300,10 +298,7 @@ async fn main() -> anyhow::Result<()> {
             let graph_store = rustagent::graph::store::SqliteGraphStore::new(database.clone());
 
             match action {
-                Some(TaskAction::List {
-                    status,
-                    priority: _,
-                }) => {
+                Some(TaskAction::List { status }) => {
                     let query = rustagent::graph::store::NodeQuery {
                         node_type: Some(rustagent::graph::NodeType::Task),
                         status: status.and_then(|s| s.parse().ok()),

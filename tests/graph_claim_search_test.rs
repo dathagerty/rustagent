@@ -1,107 +1,11 @@
+mod common;
+
 use anyhow::Result;
 use chrono::Utc;
-use rustagent::db::Database;
-use rustagent::graph::store::{GraphStore, SqliteGraphStore};
+use common::{create_test_goal, create_test_observation, create_test_task, setup_test_env};
+use rustagent::graph::store::GraphStore;
 use rustagent::graph::*;
 use std::collections::HashMap;
-
-/// Helper to create a test goal node
-fn create_test_goal(id: &str, project_id: &str, title: &str) -> GraphNode {
-    GraphNode {
-        id: id.to_string(),
-        project_id: project_id.to_string(),
-        node_type: NodeType::Goal,
-        title: title.to_string(),
-        description: "Test goal".to_string(),
-        status: NodeStatus::Pending,
-        priority: Some(Priority::High),
-        assigned_to: None,
-        created_by: None,
-        labels: vec![],
-        created_at: Utc::now(),
-        started_at: None,
-        completed_at: None,
-        blocked_reason: None,
-        metadata: HashMap::new(),
-    }
-}
-
-/// Helper to create a test task node
-fn create_test_task(id: &str, project_id: &str, title: &str, status: NodeStatus) -> GraphNode {
-    GraphNode {
-        id: id.to_string(),
-        project_id: project_id.to_string(),
-        node_type: NodeType::Task,
-        title: title.to_string(),
-        description: "Test task".to_string(),
-        status,
-        priority: Some(Priority::Medium),
-        assigned_to: None,
-        created_by: None,
-        labels: vec![],
-        created_at: Utc::now(),
-        started_at: None,
-        completed_at: None,
-        blocked_reason: None,
-        metadata: HashMap::new(),
-    }
-}
-
-/// Helper to create a test observation node
-fn create_test_observation(
-    id: &str,
-    project_id: &str,
-    title: &str,
-    description: &str,
-) -> GraphNode {
-    GraphNode {
-        id: id.to_string(),
-        project_id: project_id.to_string(),
-        node_type: NodeType::Observation,
-        title: title.to_string(),
-        description: description.to_string(),
-        status: NodeStatus::Active,
-        priority: None,
-        assigned_to: None,
-        created_by: None,
-        labels: vec![],
-        created_at: Utc::now(),
-        started_at: None,
-        completed_at: None,
-        blocked_reason: None,
-        metadata: HashMap::new(),
-    }
-}
-
-/// Helper to set up a test database with a project
-async fn setup_test_env() -> Result<(Database, SqliteGraphStore)> {
-    let db = Database::open_in_memory().await?;
-    let graph_store = SqliteGraphStore::new(db.clone());
-
-    // Create a test project by directly inserting into the database
-    let db_for_project = db.clone();
-    db_for_project
-        .connection()
-        .call(|conn| {
-            let now = chrono::Utc::now().to_rfc3339();
-            conn.execute(
-                "INSERT INTO projects (id, name, path, registered_at, config_overrides, metadata)
-                 VALUES (?, ?, ?, ?, ?, ?)",
-                rusqlite::params![
-                    "proj-1",
-                    "proj-1",
-                    "/tmp/proj-1",
-                    &now,
-                    None::<String>,
-                    "{}"
-                ],
-            )?;
-            Ok(())
-        })
-        .await?;
-
-    Ok((db, graph_store))
-}
 
 /// P1b.AC5.1: claim_task atomically sets status Ready->Claimed and assigned_to
 #[tokio::test]

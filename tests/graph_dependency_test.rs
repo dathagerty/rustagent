@@ -1,87 +1,12 @@
+mod common;
+
 use anyhow::Result;
 use chrono::Utc;
-use rustagent::db::Database;
-use rustagent::graph::store::{GraphStore, SqliteGraphStore};
+use common::{create_test_goal, create_test_task_with_priority, setup_test_env};
+use rustagent::graph::store::GraphStore;
 use rustagent::graph::*;
-use std::collections::HashMap;
-
-/// Helper to create a test goal node
-fn create_test_goal(id: &str, project_id: &str, title: &str) -> GraphNode {
-    GraphNode {
-        id: id.to_string(),
-        project_id: project_id.to_string(),
-        node_type: NodeType::Goal,
-        title: title.to_string(),
-        description: "Test goal".to_string(),
-        status: NodeStatus::Pending,
-        priority: Some(Priority::High),
-        assigned_to: None,
-        created_by: None,
-        labels: vec![],
-        created_at: Utc::now(),
-        started_at: None,
-        completed_at: None,
-        blocked_reason: None,
-        metadata: HashMap::new(),
-    }
-}
-
-/// Helper to create a test task node
-fn create_test_task(
-    id: &str,
-    project_id: &str,
-    title: &str,
-    status: NodeStatus,
-    priority: Option<Priority>,
-) -> GraphNode {
-    GraphNode {
-        id: id.to_string(),
-        project_id: project_id.to_string(),
-        node_type: NodeType::Task,
-        title: title.to_string(),
-        description: "Test task".to_string(),
-        status,
-        priority,
-        assigned_to: None,
-        created_by: None,
-        labels: vec![],
-        created_at: Utc::now(),
-        started_at: None,
-        completed_at: None,
-        blocked_reason: None,
-        metadata: HashMap::new(),
-    }
-}
-
-/// Helper to set up a test database with a project
-async fn setup_test_env() -> Result<(Database, SqliteGraphStore)> {
-    let db = Database::open_in_memory().await?;
-    let graph_store = SqliteGraphStore::new(db.clone());
-
-    // Create a test project by directly inserting into the database
-    let db_for_project = db.clone();
-    db_for_project
-        .connection()
-        .call(|conn| {
-            let now = chrono::Utc::now().to_rfc3339();
-            conn.execute(
-                "INSERT INTO projects (id, name, path, registered_at, config_overrides, metadata)
-                 VALUES (?, ?, ?, ?, ?, ?)",
-                rusqlite::params![
-                    "proj-1",
-                    "proj-1",
-                    "/tmp/proj-1",
-                    &now,
-                    None::<String>,
-                    "{}"
-                ],
-            )?;
-            Ok(())
-        })
-        .await?;
-
-    Ok((db, graph_store))
-}
+use std::time::Duration;
+use tokio::time::sleep;
 
 /// P1b.AC4.1: Task moves from Pending to Ready when all DependsOn targets are Completed
 #[tokio::test]
@@ -90,14 +15,14 @@ async fn test_task_pending_to_ready_when_deps_complete() -> Result<()> {
 
     // Create a goal and two tasks
     let goal = create_test_goal("ra-a1b2", "proj-1", "Test Goal");
-    let task_a = create_test_task(
+    let task_a = create_test_task_with_priority(
         "ra-a1b2.1",
         "proj-1",
         "Task A",
         NodeStatus::Pending,
         Some(Priority::Medium),
     );
-    let task_b = create_test_task(
+    let task_b = create_test_task_with_priority(
         "ra-a1b2.2",
         "proj-1",
         "Task B",
@@ -149,21 +74,21 @@ async fn test_get_ready_tasks_filters_correctly() -> Result<()> {
     store.create_node(&goal).await?;
 
     // Create three tasks: one Ready, one Pending (with unmet deps), one Completed
-    let task_ready = create_test_task(
+    let task_ready = create_test_task_with_priority(
         "ra-a1b2.1",
         "proj-1",
         "Task Ready",
         NodeStatus::Ready,
         Some(Priority::Medium),
     );
-    let task_pending = create_test_task(
+    let task_pending = create_test_task_with_priority(
         "ra-a1b2.2",
         "proj-1",
         "Task Pending",
         NodeStatus::Pending,
         Some(Priority::Medium),
     );
-    let task_completed = create_test_task(
+    let task_completed = create_test_task_with_priority(
         "ra-a1b2.3",
         "proj-1",
         "Task Completed",
@@ -205,14 +130,14 @@ async fn test_get_next_task_priority_and_downstream() -> Result<()> {
     store.create_node(&goal).await?;
 
     // Create two ready tasks: one High priority (blocking 3 tasks), one Critical priority (blocking 0)
-    let task_high_priority = create_test_task(
+    let task_high_priority = create_test_task_with_priority(
         "ra-a1b2.1",
         "proj-1",
         "High Priority",
         NodeStatus::Ready,
         Some(Priority::High),
     );
-    let task_critical_priority = create_test_task(
+    let task_critical_priority = create_test_task_with_priority(
         "ra-a1b2.2",
         "proj-1",
         "Critical Priority",
@@ -224,21 +149,21 @@ async fn test_get_next_task_priority_and_downstream() -> Result<()> {
     store.create_node(&task_critical_priority).await?;
 
     // Create 3 more tasks that depend on the High priority task
-    let dependent1 = create_test_task(
+    let dependent1 = create_test_task_with_priority(
         "ra-a1b2.3",
         "proj-1",
         "Dependent 1",
         NodeStatus::Pending,
         Some(Priority::Medium),
     );
-    let dependent2 = create_test_task(
+    let dependent2 = create_test_task_with_priority(
         "ra-a1b2.4",
         "proj-1",
         "Dependent 2",
         NodeStatus::Pending,
         Some(Priority::Medium),
     );
-    let dependent3 = create_test_task(
+    let dependent3 = create_test_task_with_priority(
         "ra-a1b2.5",
         "proj-1",
         "Dependent 3",
@@ -274,6 +199,8 @@ async fn test_get_next_task_priority_and_downstream() -> Result<()> {
 }
 
 /// P1b.AC4.3 variant: When priorities are equal, downstream count should be the tiebreaker
+/// This test creates tasks in reverse order (B before A) to ensure that created_at ordering
+/// would pick the wrong task without the downstream count logic.
 #[tokio::test]
 async fn test_get_next_task_tiebreak_by_downstream() -> Result<()> {
     let (_db, store) = setup_test_env().await?;
@@ -282,41 +209,46 @@ async fn test_get_next_task_tiebreak_by_downstream() -> Result<()> {
     let goal = create_test_goal("ra-a1b2", "proj-1", "Test Goal");
     store.create_node(&goal).await?;
 
-    // Create two ready tasks with the same priority
-    let task_a = create_test_task(
-        "ra-a1b2.1",
-        "proj-1",
-        "Task A",
-        NodeStatus::Ready,
-        Some(Priority::High),
-    );
-    let task_b = create_test_task(
+    // Create Task B FIRST (so it has an earlier created_at)
+    let task_b = create_test_task_with_priority(
         "ra-a1b2.2",
         "proj-1",
         "Task B",
         NodeStatus::Ready,
         Some(Priority::High),
     );
-
-    store.create_node(&task_a).await?;
     store.create_node(&task_b).await?;
 
+    // Small delay to ensure Task A has a later created_at
+    sleep(Duration::from_millis(10)).await;
+
+    // Create Task A SECOND (so it has a later created_at)
+    // Without downstream count logic, ordering by created_at would pick B
+    let task_a = create_test_task_with_priority(
+        "ra-a1b2.1",
+        "proj-1",
+        "Task A",
+        NodeStatus::Ready,
+        Some(Priority::High),
+    );
+    store.create_node(&task_a).await?;
+
     // Create 3 tasks that depend on Task A (higher downstream count)
-    let dep_a1 = create_test_task(
+    let dep_a1 = create_test_task_with_priority(
         "ra-a1b2.3",
         "proj-1",
         "Dep A1",
         NodeStatus::Pending,
         Some(Priority::Medium),
     );
-    let dep_a2 = create_test_task(
+    let dep_a2 = create_test_task_with_priority(
         "ra-a1b2.4",
         "proj-1",
         "Dep A2",
         NodeStatus::Pending,
         Some(Priority::Medium),
     );
-    let dep_a3 = create_test_task(
+    let dep_a3 = create_test_task_with_priority(
         "ra-a1b2.5",
         "proj-1",
         "Dep A3",
@@ -341,11 +273,14 @@ async fn test_get_next_task_tiebreak_by_downstream() -> Result<()> {
         store.add_edge(&edge).await?;
     }
 
-    // get_next_task should return Task A (higher downstream count)
+    // get_next_task should return Task A (higher downstream count), not Task B (earlier created_at)
     let next_task = store.get_next_task("ra-a1b2").await?;
     assert!(next_task.is_some());
     let task = next_task.unwrap();
-    assert_eq!(task.id, "ra-a1b2.1");
+    assert_eq!(
+        task.id, "ra-a1b2.1",
+        "Expected Task A with higher downstream count, not Task B with earlier created_at"
+    );
 
     Ok(())
 }

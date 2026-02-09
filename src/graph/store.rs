@@ -1,6 +1,6 @@
 use crate::db::Database;
 use crate::graph::{GraphEdge, GraphNode, NodeStatus, NodeType, parent_id, validate_status};
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 use chrono::Utc;
 use std::collections::HashMap;
@@ -234,7 +234,8 @@ impl GraphStore for SqliteGraphStore {
 
         db.connection()
             .call(move |conn| {
-                let tx = conn.transaction()?;
+                let tx =
+                    conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
 
                 // Insert the node
                 tx.execute(
@@ -317,15 +318,6 @@ impl GraphStore for SqliteGraphStore {
         description: Option<&str>,
         metadata: Option<&HashMap<String, String>>,
     ) -> Result<()> {
-        // Validate status if provided
-        if let Some(s) = status {
-            // Get the node to determine its type
-            let node = self.get_node(id).await?;
-            if let Some(n) = node {
-                validate_status(&n.node_type, &s)?;
-            }
-        }
-
         let id = id.to_string();
         let status_str = status.map(|s| s.to_string());
         let title_owned = title.map(|t| t.to_string());
@@ -335,7 +327,25 @@ impl GraphStore for SqliteGraphStore {
         self.db
             .connection()
             .call(move |conn| {
-                let tx = conn.transaction()?;
+                let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+
+                // Validate status if provided (inside transaction to avoid TOCTOU)
+                if let Some(s) = &status_str {
+                    // Get the node to determine its type
+                    let node_type_str: String = tx.query_row(
+                        "SELECT node_type FROM nodes WHERE id = ?1",
+                        rusqlite::params![&id],
+                        |row| row.get(0),
+                    )?;
+
+                    let node_type: NodeType = node_type_str.parse()
+                        .map_err(|_| rusqlite::Error::InvalidParameterName("Invalid node_type".to_string()))?;
+                    let new_status: NodeStatus = s.parse()
+                        .map_err(|_| rusqlite::Error::InvalidParameterName("Invalid status".to_string()))?;
+
+                    validate_status(&node_type, &new_status)
+                        .map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+                }
 
                 // Build dynamic UPDATE statement
                 let mut updates = Vec::new();
@@ -492,7 +502,8 @@ impl GraphStore for SqliteGraphStore {
             .db
             .connection()
             .call(move |conn| {
-                let tx = conn.transaction()?;
+                let tx =
+                    conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
 
                 tx.execute(
                     "UPDATE nodes SET status = 'claimed', assigned_to = ?1, started_at = ?2
@@ -566,19 +577,9 @@ impl GraphStore for SqliteGraphStore {
                           AND status = 'ready'
                     ),
                     downstream_counts AS (
-                        SELECT rt.id, COUNT(*) as downstream_count
+                        SELECT rt.id, COUNT(DISTINCT e.from_node) as downstream_count
                         FROM ready_tasks rt
-                        LEFT JOIN (
-                            WITH RECURSIVE transitive_deps AS (
-                                SELECT from_node as start_node, to_node FROM edges
-                                WHERE edge_type = 'depends_on'
-                                UNION ALL
-                                SELECT td.start_node, e.to_node FROM transitive_deps td
-                                JOIN edges e ON e.from_node = td.to_node
-                                WHERE e.edge_type = 'depends_on'
-                            )
-                            SELECT DISTINCT start_node FROM transitive_deps
-                        ) td ON rt.id = td.start_node
+                        LEFT JOIN edges e ON rt.id = e.to_node AND e.edge_type = 'depends_on'
                         GROUP BY rt.id
                     )
                     SELECT n.id, n.project_id, n.node_type, n.title, n.description, n.status,
@@ -609,17 +610,6 @@ impl GraphStore for SqliteGraphStore {
     }
 
     async fn add_edge(&self, edge: &GraphEdge) -> Result<()> {
-        // Validate that both nodes exist
-        let from_node = self.get_node(&edge.from_node).await?;
-        let to_node = self.get_node(&edge.to_node).await?;
-
-        if from_node.is_none() {
-            return Err(anyhow!("from_node does not exist: {}", edge.from_node));
-        }
-        if to_node.is_none() {
-            return Err(anyhow!("to_node does not exist: {}", edge.to_node));
-        }
-
         let edge_id = edge.id.clone();
         let edge_type = edge.edge_type.to_string();
         let from_node_id = edge.from_node.clone();
@@ -630,7 +620,45 @@ impl GraphStore for SqliteGraphStore {
         self.db
             .connection()
             .call(move |conn| {
-                conn.execute(
+                let tx =
+                    conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+
+                // Validate that both nodes exist (inside transaction)
+                let from_exists: bool = tx
+                    .query_row(
+                        "SELECT COUNT(*) > 0 FROM nodes WHERE id = ?1",
+                        rusqlite::params![&from_node_id],
+                        |row| row.get(0),
+                    )
+                    .map_err(|e| tokio_rusqlite::Error::Rusqlite(e))?;
+
+                if !from_exists {
+                    return Err(tokio_rusqlite::Error::Rusqlite(
+                        rusqlite::Error::InvalidParameterName(format!(
+                            "from_node does not exist: {}",
+                            from_node_id
+                        )),
+                    ));
+                }
+
+                let to_exists: bool = tx
+                    .query_row(
+                        "SELECT COUNT(*) > 0 FROM nodes WHERE id = ?1",
+                        rusqlite::params![&to_node_id],
+                        |row| row.get(0),
+                    )
+                    .map_err(|e| tokio_rusqlite::Error::Rusqlite(e))?;
+
+                if !to_exists {
+                    return Err(tokio_rusqlite::Error::Rusqlite(
+                        rusqlite::Error::InvalidParameterName(format!(
+                            "to_node does not exist: {}",
+                            to_node_id
+                        )),
+                    ));
+                }
+
+                tx.execute(
                     "INSERT INTO edges (id, edge_type, from_node, to_node, label, created_at)
                      VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                     rusqlite::params![
@@ -642,9 +670,11 @@ impl GraphStore for SqliteGraphStore {
                         &created_at
                     ],
                 )?;
+                tx.commit()?;
                 Ok(())
             })
-            .await?;
+            .await
+            .context("Failed to add edge")?;
 
         Ok(())
     }
@@ -946,7 +976,8 @@ impl GraphStore for SqliteGraphStore {
             .db
             .connection()
             .call(move |conn| {
-                let tx = conn.transaction()?;
+                let tx =
+                    conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
 
                 // Get current metadata
                 let metadata_json: String = tx.query_row(

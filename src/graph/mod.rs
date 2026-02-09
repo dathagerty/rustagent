@@ -206,7 +206,7 @@ impl FromStr for Priority {
 }
 
 /// A node in the work graph
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GraphNode {
     pub id: String,
     pub project_id: String,
@@ -226,7 +226,7 @@ pub struct GraphNode {
 }
 
 /// An edge connecting two nodes in the work graph
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GraphEdge {
     pub id: String,
     pub edge_type: EdgeType,

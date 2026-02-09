@@ -1,90 +1,15 @@
+mod common;
+
 use anyhow::Result;
 use chrono::Utc;
-use rustagent::db::Database;
+use common::{create_test_goal, create_test_task, setup_test_env_with_project};
 use rustagent::graph::store::GraphStore;
 use rustagent::graph::*;
 use std::collections::HashMap;
 
-/// Helper to create a test goal node
-fn create_test_goal(id: &str, project_id: &str, title: &str) -> GraphNode {
-    GraphNode {
-        id: id.to_string(),
-        project_id: project_id.to_string(),
-        node_type: NodeType::Goal,
-        title: title.to_string(),
-        description: "Test goal".to_string(),
-        status: NodeStatus::Pending,
-        priority: Some(Priority::High),
-        assigned_to: None,
-        created_by: None,
-        labels: vec![],
-        created_at: Utc::now(),
-        started_at: None,
-        completed_at: None,
-        blocked_reason: None,
-        metadata: HashMap::new(),
-    }
-}
-
-/// Helper to create a test task node
-fn create_test_task(id: &str, project_id: &str, title: &str, status: NodeStatus) -> GraphNode {
-    GraphNode {
-        id: id.to_string(),
-        project_id: project_id.to_string(),
-        node_type: NodeType::Task,
-        title: title.to_string(),
-        description: "Test task".to_string(),
-        status,
-        priority: Some(Priority::Medium),
-        assigned_to: None,
-        created_by: None,
-        labels: vec![],
-        created_at: Utc::now(),
-        started_at: None,
-        completed_at: None,
-        blocked_reason: None,
-        metadata: HashMap::new(),
-    }
-}
-
-/// Helper to set up a test database with a project
-async fn setup_test_env() -> Result<(
-    Database,
-    rustagent::graph::store::SqliteGraphStore,
-    rustagent::project::ProjectStore,
-)> {
-    let db = Database::open_in_memory().await?;
-    let proj_store = rustagent::project::ProjectStore::new(db.clone());
-    let graph_store = rustagent::graph::store::SqliteGraphStore::new(db.clone());
-
-    // Create a test project by directly inserting into the database
-    let db_for_project = db.clone();
-    db_for_project
-        .connection()
-        .call(|conn| {
-            let now = chrono::Utc::now().to_rfc3339();
-            conn.execute(
-                "INSERT INTO projects (id, name, path, registered_at, config_overrides, metadata)
-                 VALUES (?, ?, ?, ?, ?, ?)",
-                rusqlite::params![
-                    "proj-1",
-                    "proj-1",
-                    "/tmp/proj-1",
-                    &now,
-                    None::<String>,
-                    "{}"
-                ],
-            )?;
-            Ok(())
-        })
-        .await?;
-
-    Ok((db, graph_store, proj_store))
-}
-
 #[tokio::test]
 async fn test_create_and_get_goal_node() -> Result<()> {
-    let (_db, store, _proj_store) = setup_test_env().await?;
+    let (_db, store, _proj_store) = setup_test_env_with_project().await?;
 
     let goal = create_test_goal("ra-a1b2", "proj-1", "Test Goal");
     store.create_node(&goal).await?;
@@ -102,7 +27,7 @@ async fn test_create_and_get_goal_node() -> Result<()> {
 
 #[tokio::test]
 async fn test_get_nonexistent_node() -> Result<()> {
-    let (_db, store, _proj_store) = setup_test_env().await?;
+    let (_db, store, _proj_store) = setup_test_env_with_project().await?;
 
     let retrieved = store.get_node("nonexistent-id").await?;
     assert!(retrieved.is_none());
@@ -112,7 +37,7 @@ async fn test_get_nonexistent_node() -> Result<()> {
 
 #[tokio::test]
 async fn test_update_node_status() -> Result<()> {
-    let (_db, store, _proj_store) = setup_test_env().await?;
+    let (_db, store, _proj_store) = setup_test_env_with_project().await?;
 
     let goal = create_test_goal("ra-a1b2", "proj-1", "Goal");
     store.create_node(&goal).await?;
@@ -134,7 +59,7 @@ async fn test_update_node_status() -> Result<()> {
 
 #[tokio::test]
 async fn test_update_node_title() -> Result<()> {
-    let (_db, store, _proj_store) = setup_test_env().await?;
+    let (_db, store, _proj_store) = setup_test_env_with_project().await?;
 
     let goal = create_test_goal("ra-a1b2", "proj-1", "Goal");
     store.create_node(&goal).await?;
@@ -156,7 +81,7 @@ async fn test_update_node_title() -> Result<()> {
 
 #[tokio::test]
 async fn test_add_and_get_edge() -> Result<()> {
-    let (_db, store, _proj_store) = setup_test_env().await?;
+    let (_db, store, _proj_store) = setup_test_env_with_project().await?;
 
     let goal = create_test_goal("ra-a1b2", "proj-1", "Goal");
     let task = create_test_task("ra-a1b2.1", "proj-1", "Task", NodeStatus::Pending);
@@ -186,7 +111,7 @@ async fn test_add_and_get_edge() -> Result<()> {
 
 #[tokio::test]
 async fn test_get_children() -> Result<()> {
-    let (_db, store, _proj_store) = setup_test_env().await?;
+    let (_db, store, _proj_store) = setup_test_env_with_project().await?;
 
     let goal = create_test_goal("ra-a1b2", "proj-1", "Goal");
     store.create_node(&goal).await?;
@@ -207,7 +132,7 @@ async fn test_get_children() -> Result<()> {
 
 #[tokio::test]
 async fn test_get_subtree() -> Result<()> {
-    let (_db, store, _proj_store) = setup_test_env().await?;
+    let (_db, store, _proj_store) = setup_test_env_with_project().await?;
 
     let goal = create_test_goal("ra-a1b2", "proj-1", "Goal");
     store.create_node(&goal).await?;
@@ -246,7 +171,7 @@ async fn test_get_subtree() -> Result<()> {
 
 #[tokio::test]
 async fn test_get_active_decisions() -> Result<()> {
-    let (_db, store, _proj_store) = setup_test_env().await?;
+    let (_db, store, _proj_store) = setup_test_env_with_project().await?;
 
     let active_decision = GraphNode {
         id: generate_goal_id(),
@@ -317,7 +242,7 @@ async fn test_get_active_decisions() -> Result<()> {
 
 #[tokio::test]
 async fn test_get_full_graph() -> Result<()> {
-    let (_db, store, _proj_store) = setup_test_env().await?;
+    let (_db, store, _proj_store) = setup_test_env_with_project().await?;
 
     let goal = create_test_goal("ra-goal1", "proj-1", "Goal");
     store.create_node(&goal).await?;
@@ -347,7 +272,7 @@ async fn test_get_full_graph() -> Result<()> {
 
 #[tokio::test]
 async fn test_search_nodes_by_title() -> Result<()> {
-    let (_db, store, _proj_store) = setup_test_env().await?;
+    let (_db, store, _proj_store) = setup_test_env_with_project().await?;
 
     let goal = GraphNode {
         id: generate_goal_id(),
@@ -380,7 +305,7 @@ async fn test_search_nodes_by_title() -> Result<()> {
 
 #[tokio::test]
 async fn test_search_nodes_with_type_filter() -> Result<()> {
-    let (_db, store, _proj_store) = setup_test_env().await?;
+    let (_db, store, _proj_store) = setup_test_env_with_project().await?;
 
     let goal = GraphNode {
         id: generate_goal_id(),
@@ -438,7 +363,7 @@ async fn test_search_nodes_with_type_filter() -> Result<()> {
 
 #[tokio::test]
 async fn test_claim_task() -> Result<()> {
-    let (_db, store, _proj_store) = setup_test_env().await?;
+    let (_db, store, _proj_store) = setup_test_env_with_project().await?;
 
     let task = create_test_task("ra-task1", "proj-1", "Test Task", NodeStatus::Ready);
     store.create_node(&task).await?;
@@ -457,7 +382,7 @@ async fn test_claim_task() -> Result<()> {
 
 #[tokio::test]
 async fn test_claim_task_already_claimed() -> Result<()> {
-    let (_db, store, _proj_store) = setup_test_env().await?;
+    let (_db, store, _proj_store) = setup_test_env_with_project().await?;
 
     let task = create_test_task("ra-task1", "proj-1", "Test Task", NodeStatus::Ready);
     store.create_node(&task).await?;
@@ -475,7 +400,7 @@ async fn test_claim_task_already_claimed() -> Result<()> {
 
 #[tokio::test]
 async fn test_next_child_seq() -> Result<()> {
-    let (_db, store, _proj_store) = setup_test_env().await?;
+    let (_db, store, _proj_store) = setup_test_env_with_project().await?;
 
     let parent = create_test_goal("ra-parent", "proj-1", "Parent");
     store.create_node(&parent).await?;
@@ -497,7 +422,7 @@ async fn test_next_child_seq() -> Result<()> {
 
 #[tokio::test]
 async fn test_query_nodes_by_type() -> Result<()> {
-    let (_db, store, _proj_store) = setup_test_env().await?;
+    let (_db, store, _proj_store) = setup_test_env_with_project().await?;
 
     let goal = create_test_goal("ra-g1", "proj-1", "Goal");
     let task = create_test_task("ra-t1", "proj-1", "Task", NodeStatus::Pending);
@@ -521,7 +446,7 @@ async fn test_query_nodes_by_type() -> Result<()> {
 
 #[tokio::test]
 async fn test_query_nodes_by_status() -> Result<()> {
-    let (_db, store, _proj_store) = setup_test_env().await?;
+    let (_db, store, _proj_store) = setup_test_env_with_project().await?;
 
     let pending_task = create_test_task("ra-t1", "proj-1", "Pending Task", NodeStatus::Pending);
     let active_task = create_test_task("ra-t2", "proj-1", "Active Task", NodeStatus::Active);
