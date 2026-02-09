@@ -341,7 +341,7 @@ async fn test_round_trip_export_import() -> Result<()> {
     let export1 = export_goal(&graph_store, "ra-test", "test-project").await?;
 
     // Parse the export
-    let parsed1: toml::Value = toml::from_str(&export1)?;
+    let _parsed1: toml::Value = toml::from_str(&export1)?;
 
     // Verify we can round-trip through import
     let (_db2, graph_store2) = setup_test_env().await?;

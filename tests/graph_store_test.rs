@@ -47,7 +47,14 @@ async fn test_update_node_status() -> Result<()> {
 
     // Update status to InProgress (valid for Task)
     store
-        .update_node("ra-a1b2.1", Some(NodeStatus::InProgress), None, None, None)
+        .update_node(
+            "ra-a1b2.1",
+            Some(NodeStatus::InProgress),
+            None,
+            None,
+            None,
+            None,
+        )
         .await?;
 
     let updated = store.get_node("ra-a1b2.1").await?;
@@ -69,7 +76,7 @@ async fn test_update_node_title() -> Result<()> {
 
     // Update title
     store
-        .update_node("ra-a1b2.1", None, Some("New Title"), None, None)
+        .update_node("ra-a1b2.1", None, Some("New Title"), None, None, None)
         .await?;
 
     let updated = store.get_node("ra-a1b2.1").await?;

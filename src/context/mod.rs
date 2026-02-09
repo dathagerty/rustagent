@@ -246,4 +246,242 @@ mod tests {
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("AGENTS.md"));
     }
+
+    #[test]
+    fn test_build_system_prompt_output_format() {
+        use crate::agent::profile::{AgentProfile, ProfileLlmConfig};
+        use crate::graph::store::GraphStore;
+        use crate::graph::{GraphNode, NodeStatus, NodeType, Priority};
+        use crate::security::SecurityScope;
+        use anyhow::Result;
+        use async_trait::async_trait;
+        use chrono::Utc;
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        // Minimal mock GraphStore for testing
+        struct TestGraphStore;
+
+        #[async_trait]
+        impl GraphStore for TestGraphStore {
+            async fn create_node(&self, _node: &GraphNode) -> Result<()> {
+                Ok(())
+            }
+            async fn update_node(
+                &self,
+                _id: &str,
+                _status: Option<NodeStatus>,
+                _title: Option<&str>,
+                _description: Option<&str>,
+                _blocked_reason: Option<&str>,
+                _metadata: Option<&HashMap<String, String>>,
+            ) -> Result<()> {
+                Ok(())
+            }
+            async fn get_node(&self, _id: &str) -> Result<Option<GraphNode>> {
+                Ok(None)
+            }
+            async fn query_nodes(
+                &self,
+                _query: &crate::graph::store::NodeQuery,
+            ) -> Result<Vec<GraphNode>> {
+                Ok(vec![])
+            }
+            async fn claim_task(&self, _node_id: &str, _agent_id: &str) -> Result<bool> {
+                Ok(false)
+            }
+            async fn get_ready_tasks(&self, _goal_id: &str) -> Result<Vec<GraphNode>> {
+                Ok(vec![])
+            }
+            async fn get_next_task(&self, _goal_id: &str) -> Result<Option<GraphNode>> {
+                Ok(None)
+            }
+            async fn add_edge(&self, _edge: &crate::graph::GraphEdge) -> Result<()> {
+                Ok(())
+            }
+            async fn remove_edge(&self, _edge_id: &str) -> Result<()> {
+                Ok(())
+            }
+            async fn get_edges(
+                &self,
+                _node_id: &str,
+                _direction: crate::graph::store::EdgeDirection,
+            ) -> Result<Vec<(crate::graph::GraphEdge, GraphNode)>> {
+                Ok(vec![])
+            }
+            async fn get_children(
+                &self,
+                _node_id: &str,
+            ) -> Result<Vec<(GraphNode, crate::graph::EdgeType)>> {
+                Ok(vec![])
+            }
+            async fn get_subtree(&self, _node_id: &str) -> Result<Vec<GraphNode>> {
+                Ok(vec![])
+            }
+            async fn get_active_decisions(&self, _project_id: &str) -> Result<Vec<GraphNode>> {
+                Ok(vec![])
+            }
+            async fn get_full_graph(
+                &self,
+                _goal_id: &str,
+            ) -> Result<crate::graph::store::WorkGraph> {
+                Ok(crate::graph::store::WorkGraph {
+                    nodes: vec![],
+                    edges: vec![],
+                })
+            }
+            async fn search_nodes(
+                &self,
+                _query: &str,
+                _project_id: Option<&str>,
+                _node_type: Option<NodeType>,
+                _limit: usize,
+            ) -> Result<Vec<GraphNode>> {
+                Ok(vec![])
+            }
+            async fn next_child_seq(&self, _parent_id: &str) -> Result<u32> {
+                Ok(1)
+            }
+        }
+
+        // Create mock profile
+        let profile = AgentProfile {
+            name: "test_coder".to_string(),
+            extends: None,
+            role: "You are a helpful code assistant".to_string(),
+            system_prompt: "Follow these rules carefully".to_string(),
+            allowed_tools: vec!["read_file".to_string(), "write_file".to_string()],
+            security: SecurityScope {
+                allowed_paths: vec!["*".to_string()],
+                denied_paths: vec![],
+                allowed_commands: vec!["*".to_string()],
+                read_only: false,
+                can_create_files: true,
+                network_access: false,
+            },
+            llm: ProfileLlmConfig::default(),
+            turn_limit: Some(100),
+            token_budget: Some(100_000),
+        };
+
+        // Create mock work package tasks
+        let mut task_metadata = HashMap::new();
+        task_metadata.insert(
+            "acceptance_criteria".to_string(),
+            "AC1: Task should pass tests".to_string(),
+        );
+
+        let work_package_tasks = vec![GraphNode {
+            id: "task-1".to_string(),
+            project_id: "proj-1".to_string(),
+            node_type: NodeType::Task,
+            title: "Implement feature".to_string(),
+            description: "Implement a new feature".to_string(),
+            status: NodeStatus::Ready,
+            priority: Some(Priority::High),
+            assigned_to: None,
+            created_by: None,
+            labels: vec![],
+            created_at: Utc::now(),
+            started_at: None,
+            completed_at: None,
+            blocked_reason: None,
+            metadata: task_metadata,
+        }];
+
+        // Create mock decisions
+        let mut decision_metadata = HashMap::new();
+        decision_metadata.insert("chosen_option".to_string(), "Option B".to_string());
+
+        let relevant_decisions = vec![GraphNode {
+            id: "decision-1".to_string(),
+            project_id: "proj-1".to_string(),
+            node_type: NodeType::Decision,
+            title: "Architecture decision".to_string(),
+            description: "Choose architecture".to_string(),
+            status: NodeStatus::Decided,
+            priority: None,
+            assigned_to: None,
+            created_by: None,
+            labels: vec![],
+            created_at: Utc::now(),
+            started_at: None,
+            completed_at: None,
+            blocked_reason: None,
+            metadata: decision_metadata,
+        }];
+
+        // Create agent context
+        let ctx = AgentContext {
+            work_package_tasks,
+            relevant_decisions,
+            handoff_notes: Some("Previous session notes".to_string()),
+            agents_md_summaries: vec![("src/AGENTS.md".to_string(), "Code standards".to_string())],
+            profile,
+            project_path: PathBuf::from("/test/project"),
+            graph_store: Arc::new(TestGraphStore),
+        };
+
+        // Build system prompt
+        let prompt = ContextBuilder::build_system_prompt(&ctx);
+
+        // Verify expected sections are present
+        assert!(prompt.contains("## Role"), "Should contain Role section");
+        assert!(
+            prompt.contains("You are a helpful code assistant"),
+            "Should contain profile role"
+        );
+
+        assert!(prompt.contains("## Task"), "Should contain Task section");
+        assert!(prompt.contains("[TASK]"), "Should contain task marker");
+        assert!(prompt.contains("task-1"), "Should contain task ID");
+        assert!(
+            prompt.contains("[CRITERIA]"),
+            "Should contain acceptance criteria marker"
+        );
+
+        assert!(
+            prompt.contains("## Session Continuity"),
+            "Should contain Session Continuity section"
+        );
+        assert!(
+            prompt.contains("[HANDOFF]"),
+            "Should contain handoff marker"
+        );
+        assert!(
+            prompt.contains("Previous session notes"),
+            "Should contain handoff notes"
+        );
+
+        assert!(
+            prompt.contains("## Active Decisions"),
+            "Should contain Active Decisions section"
+        );
+        assert!(
+            prompt.contains("[DECISION]"),
+            "Should contain decision marker"
+        );
+        assert!(prompt.contains("decision-1"), "Should contain decision ID");
+        assert!(prompt.contains("chosen:"), "Should contain chosen option");
+
+        assert!(
+            prompt.contains("## Relevant Observations"),
+            "Should contain Relevant Observations section"
+        );
+
+        assert!(
+            prompt.contains("## Project Conventions"),
+            "Should contain Project Conventions section"
+        );
+        assert!(
+            prompt.contains("src/AGENTS.md"),
+            "Should contain agents_md path"
+        );
+
+        assert!(prompt.contains("## Rules"), "Should contain Rules section");
+        assert!(
+            prompt.contains("Follow these rules carefully"),
+            "Should contain system prompt rules"
+        );
+    }
 }

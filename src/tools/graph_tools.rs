@@ -210,7 +210,7 @@ impl Tool for UpdateNodeTool {
             .map(|m| m.iter().map(|(k, v)| (k.clone(), v.to_string())).collect());
 
         self.store
-            .update_node(node_id, status, title, description, metadata.as_ref())
+            .update_node(node_id, status, title, description, None, metadata.as_ref())
             .await?;
 
         Ok(json!({
@@ -741,7 +741,7 @@ impl Tool for ChooseOptionTool {
 
         // Update chosen option status to Chosen
         self.store
-            .update_node(option_id, Some(NodeStatus::Chosen), None, None, None)
+            .update_node(option_id, Some(NodeStatus::Chosen), None, None, None, None)
             .await?;
 
         // Find other options and add Rejected edges
@@ -771,14 +771,28 @@ impl Tool for ChooseOptionTool {
 
                 // Update option status to Rejected
                 self.store
-                    .update_node(&option.id, Some(NodeStatus::Rejected), None, None, None)
+                    .update_node(
+                        &option.id,
+                        Some(NodeStatus::Rejected),
+                        None,
+                        None,
+                        None,
+                        None,
+                    )
                     .await?;
             }
         }
 
         // Update decision status to Decided
         self.store
-            .update_node(decision_id, Some(NodeStatus::Decided), None, None, None)
+            .update_node(
+                decision_id,
+                Some(NodeStatus::Decided),
+                None,
+                None,
+                None,
+                None,
+            )
             .await?;
 
         Ok(json!({

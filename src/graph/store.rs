@@ -50,6 +50,7 @@ pub trait GraphStore: Send + Sync {
         status: Option<NodeStatus>,
         title: Option<&str>,
         description: Option<&str>,
+        blocked_reason: Option<&str>,
         metadata: Option<&HashMap<String, String>>,
     ) -> Result<()>;
 
@@ -316,12 +317,14 @@ impl GraphStore for SqliteGraphStore {
         status: Option<NodeStatus>,
         title: Option<&str>,
         description: Option<&str>,
+        blocked_reason: Option<&str>,
         metadata: Option<&HashMap<String, String>>,
     ) -> Result<()> {
         let id = id.to_string();
         let status_str = status.map(|s| s.to_string());
         let title_owned = title.map(|t| t.to_string());
         let description_owned = description.map(|d| d.to_string());
+        let blocked_reason_owned = blocked_reason.map(|r| r.to_string());
         let metadata_json = metadata.map(serde_json::to_string).transpose()?;
 
         self.db
@@ -362,6 +365,10 @@ impl GraphStore for SqliteGraphStore {
                 if let Some(d) = &description_owned {
                     updates.push("description = ?");
                     params.push(d);
+                }
+                if let Some(r) = &blocked_reason_owned {
+                    updates.push("blocked_reason = ?");
+                    params.push(r);
                 }
                 if let Some(m) = &metadata_json {
                     updates.push("metadata = ?");

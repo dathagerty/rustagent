@@ -4,9 +4,10 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
 type RecordedCalls = Vec<(Vec<Message>, Vec<ToolDefinition>)>;
+type MockResponseQueue = VecDeque<(ResponseContent, Option<String>)>;
 
 pub struct MockLlmClient {
-    responses: Arc<Mutex<VecDeque<(ResponseContent, Option<String>)>>>,
+    responses: Arc<Mutex<MockResponseQueue>>,
     recorded_calls: Arc<Mutex<RecordedCalls>>,
     token_counts: Arc<Mutex<Option<(usize, usize)>>>, // (input_tokens, output_tokens)
 }

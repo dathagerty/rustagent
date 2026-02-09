@@ -52,7 +52,14 @@ async fn test_task_pending_to_ready_when_deps_complete() -> Result<()> {
 
     // Complete Task A
     store
-        .update_node("ra-a1b2.1", Some(NodeStatus::Completed), None, None, None)
+        .update_node(
+            "ra-a1b2.1",
+            Some(NodeStatus::Completed),
+            None,
+            None,
+            None,
+            None,
+        )
         .await?;
 
     // Now Task B should be Ready (automatically promoted by the status transition hook)

@@ -218,7 +218,6 @@ fn db_path() -> anyhow::Result<PathBuf> {
 }
 
 /// Resolve project from --project flag or current working directory
-#[allow(dead_code)]
 async fn resolve_project(
     db: &db::Database,
     project_name: Option<&str>,
@@ -337,7 +336,7 @@ async fn main() -> anyhow::Result<()> {
 
             // Create session
             let session_store = rustagent::graph::session::SessionStore::new(database.clone());
-            let session = session_store.create_session(&goal_id, &profile).await?;
+            let session = session_store.create_session(&project.id, &goal_id).await?;
             println!("Started session: {}", session.id);
 
             // Resolve profile
@@ -405,6 +404,7 @@ async fn main() -> anyhow::Result<()> {
                             None,
                             None,
                             None,
+                            None,
                         )
                         .await?;
                 }
@@ -414,6 +414,7 @@ async fn main() -> anyhow::Result<()> {
                         .update_node(
                             &goal_id,
                             Some(rustagent::graph::NodeStatus::Blocked),
+                            None,
                             None,
                             Some(&reason),
                             None,
@@ -426,6 +427,7 @@ async fn main() -> anyhow::Result<()> {
                         .update_node(
                             &goal_id,
                             Some(rustagent::graph::NodeStatus::Failed),
+                            None,
                             None,
                             Some(&error),
                             None,
@@ -441,6 +443,7 @@ async fn main() -> anyhow::Result<()> {
                         .update_node(
                             &goal_id,
                             Some(rustagent::graph::NodeStatus::Completed),
+                            None,
                             None,
                             Some(&format!(
                                 "Token budget exhausted after {} tokens",

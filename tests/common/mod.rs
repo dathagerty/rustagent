@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use anyhow::Result;
 use async_trait::async_trait;
 use chrono::Utc;
@@ -214,6 +216,7 @@ impl GraphStore for MockGraphStore {
         _status: Option<NodeStatus>,
         _title: Option<&str>,
         _description: Option<&str>,
+        _blocked_reason: Option<&str>,
         _metadata: Option<&HashMap<String, String>>,
     ) -> Result<()> {
         Ok(())

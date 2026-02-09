@@ -241,6 +241,7 @@ pub async fn import_goal(
                                     Some(node.status),
                                     Some(&node.title),
                                     Some(&node.description),
+                                    node.blocked_reason.as_deref(),
                                     Some(&node.metadata),
                                 )
                                 .await?;

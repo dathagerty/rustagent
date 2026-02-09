@@ -42,6 +42,9 @@ impl SessionStore {
         self.db
             .connection()
             .call(move |conn| {
+                conn.execute_batch("BEGIN IMMEDIATE")
+                    .map_err(tokio_rusqlite::Error::Rusqlite)?;
+
                 conn.execute(
                     "INSERT INTO sessions (id, project_id, goal_id, started_at, agent_ids)
                      VALUES (?, ?, ?, ?, ?)",
@@ -53,7 +56,10 @@ impl SessionStore {
                         "[]"
                     ],
                 )
-                .map_err(tokio_rusqlite::Error::Rusqlite)
+                .map_err(tokio_rusqlite::Error::Rusqlite)?;
+
+                conn.execute_batch("COMMIT")
+                    .map_err(tokio_rusqlite::Error::Rusqlite)
             })
             .await
             .map_err(|e| anyhow!("failed to insert session: {}", e))?;
