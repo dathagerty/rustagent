@@ -1,3 +1,4 @@
+use rustagent::graph::store::GraphStore;
 use rustagent::{config, db, logging, planning, project, ralph};
 
 use clap::{CommandFactory, Parser, Subcommand};
@@ -42,6 +43,23 @@ enum Commands {
         #[command(subcommand)]
         action: ProjectAction,
     },
+    /// View and manage tasks
+    Tasks {
+        #[command(subcommand)]
+        action: Option<TaskAction>,
+    },
+    /// View and manage decisions
+    Decisions {
+        #[command(subcommand)]
+        action: Option<DecisionAction>,
+    },
+    /// Show project status
+    Status,
+    /// Search graph nodes
+    Search {
+        /// Search query
+        query: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -65,6 +83,35 @@ enum ProjectAction {
         /// Project name
         name: String,
     },
+}
+
+#[derive(Subcommand)]
+enum TaskAction {
+    /// List all tasks (filterable)
+    List {
+        #[arg(long)]
+        status: Option<String>,
+        #[arg(long)]
+        priority: Option<String>,
+    },
+    /// Show ready tasks
+    Ready,
+    /// Recommend next task
+    Next,
+    /// Show task tree
+    Tree,
+}
+
+#[derive(Subcommand)]
+enum DecisionAction {
+    /// List active decisions
+    List,
+    /// Current truth — active decisions only
+    Now,
+    /// Full evolution including abandoned paths
+    History,
+    /// Show decision details
+    Show { id: String },
 }
 
 /// Find config file in standard locations
@@ -244,6 +291,201 @@ async fn main() -> anyhow::Result<()> {
                         println!("Project '{}' not found", name);
                     }
                 },
+            }
+        }
+        Commands::Tasks { action } => {
+            // Open database
+            let db_path = db_path()?;
+            let database = db::Database::open(&db_path).await?;
+            let graph_store = rustagent::graph::store::SqliteGraphStore::new(database.clone());
+
+            match action {
+                Some(TaskAction::List {
+                    status,
+                    priority: _,
+                }) => {
+                    let query = rustagent::graph::store::NodeQuery {
+                        node_type: Some(rustagent::graph::NodeType::Task),
+                        status: status.and_then(|s| s.parse().ok()),
+                        project_id: cli.project.clone(),
+                        parent_id: None,
+                        query: None,
+                    };
+
+                    let tasks = graph_store.query_nodes(&query).await?;
+                    if tasks.is_empty() {
+                        println!("No tasks found");
+                    } else {
+                        println!("{:<20} {:<15} {:<30}", "ID", "Status", "Title");
+                        println!("{}", "=".repeat(65));
+                        for task in tasks {
+                            println!("{:<20} {:<15} {:<30}", task.id, task.status, task.title);
+                        }
+                    }
+                }
+                Some(TaskAction::Ready) => {
+                    if let Some(proj) = cli.project {
+                        let tasks = graph_store.get_ready_tasks(&proj).await?;
+                        if tasks.is_empty() {
+                            println!("No ready tasks");
+                        } else {
+                            println!("Ready tasks for {}:", proj);
+                            println!("{:<20} {:<30}", "ID", "Title");
+                            println!("{}", "=".repeat(50));
+                            for task in tasks {
+                                println!("{:<20} {:<30}", task.id, task.title);
+                            }
+                        }
+                    } else {
+                        println!("Project must be specified with --project flag");
+                    }
+                }
+                Some(TaskAction::Next) => {
+                    if let Some(proj) = cli.project {
+                        if let Some(task) = graph_store.get_next_task(&proj).await? {
+                            println!("Recommended next task:");
+                            println!("  ID: {}", task.id);
+                            println!("  Title: {}", task.title);
+                            println!("  Description: {}", task.description);
+                            if let Some(priority) = task.priority {
+                                println!("  Priority: {}", priority);
+                            }
+                        } else {
+                            println!("No ready tasks");
+                        }
+                    } else {
+                        println!("Project must be specified with --project flag");
+                    }
+                }
+                Some(TaskAction::Tree) => {
+                    if let Some(proj) = cli.project {
+                        let subtree = graph_store.get_subtree(&proj).await?;
+                        println!("Task tree for {}:", proj);
+                        for node in subtree {
+                            println!("  - {} ({}): {}", node.id, node.status, node.title);
+                        }
+                    } else {
+                        println!("Project must be specified with --project flag");
+                    }
+                }
+                None => {
+                    println!("Please specify a task action: list, ready, next, or tree");
+                }
+            }
+        }
+        Commands::Decisions { action } => {
+            // Open database
+            let db_path = db_path()?;
+            let database = db::Database::open(&db_path).await?;
+            let graph_store = rustagent::graph::store::SqliteGraphStore::new(database.clone());
+
+            match action {
+                Some(DecisionAction::List) => {
+                    if let Some(proj) = cli.project {
+                        let decisions = graph_store.get_active_decisions(&proj).await?;
+                        if decisions.is_empty() {
+                            println!("No decisions found");
+                        } else {
+                            println!("Decisions for {}:", proj);
+                            println!("{:<20} {:<15} {:<30}", "ID", "Status", "Title");
+                            println!("{}", "=".repeat(65));
+                            for decision in decisions {
+                                println!(
+                                    "{:<20} {:<15} {:<30}",
+                                    decision.id, decision.status, decision.title
+                                );
+                            }
+                        }
+                    } else {
+                        println!("Project must be specified with --project flag");
+                    }
+                }
+                Some(DecisionAction::Now) => {
+                    if let Some(proj) = cli.project {
+                        let decisions = graph_store.get_active_decisions(&proj).await?;
+                        println!("Current active decisions for {}:", proj);
+                        for decision in decisions {
+                            println!("  - {}: {}", decision.id, decision.title);
+                        }
+                    } else {
+                        println!("Project must be specified with --project flag");
+                    }
+                }
+                Some(DecisionAction::History) => {
+                    if let Some(proj) = cli.project {
+                        let graph = graph_store.get_full_graph(&proj).await?;
+                        println!("Full decision history for {}:", proj);
+                        println!("Nodes: {}", graph.nodes.len());
+                        println!("Edges: {}", graph.edges.len());
+                    } else {
+                        println!("Project must be specified with --project flag");
+                    }
+                }
+                Some(DecisionAction::Show { id }) => {
+                    if let Some(decision) = graph_store.get_node(&id).await? {
+                        println!("Decision: {}", decision.title);
+                        println!("  ID: {}", decision.id);
+                        println!("  Status: {}", decision.status);
+                        println!("  Description: {}", decision.description);
+                    } else {
+                        println!("Decision '{}' not found", id);
+                    }
+                }
+                None => {
+                    println!("Please specify a decision action: list, now, history, or show");
+                }
+            }
+        }
+        Commands::Status => {
+            // Open database
+            let db_path = db_path()?;
+            let database = db::Database::open(&db_path).await?;
+            let graph_store = rustagent::graph::store::SqliteGraphStore::new(database.clone());
+
+            if let Some(proj) = cli.project {
+                let graph = graph_store.get_full_graph(&proj).await?;
+                println!("Status for {}:", proj);
+                println!("  Total nodes: {}", graph.nodes.len());
+                println!("  Total edges: {}", graph.edges.len());
+
+                println!("\nBreakdown:");
+                let mut pending_count = 0;
+                let mut ready_count = 0;
+                let mut completed_count = 0;
+                for node in &graph.nodes {
+                    match node.status {
+                        rustagent::graph::NodeStatus::Pending => pending_count += 1,
+                        rustagent::graph::NodeStatus::Ready => ready_count += 1,
+                        rustagent::graph::NodeStatus::Completed => completed_count += 1,
+                        _ => {}
+                    }
+                }
+                println!("  Pending: {}", pending_count);
+                println!("  Ready: {}", ready_count);
+                println!("  Completed: {}", completed_count);
+            } else {
+                println!("Project must be specified with --project flag");
+            }
+        }
+        Commands::Search { query } => {
+            // Open database
+            let db_path = db_path()?;
+            let database = db::Database::open(&db_path).await?;
+            let graph_store = rustagent::graph::store::SqliteGraphStore::new(database.clone());
+
+            let results = graph_store
+                .search_nodes(&query, cli.project.as_deref(), None, 50)
+                .await?;
+
+            if results.is_empty() {
+                println!("No results found for '{}'", query);
+            } else {
+                println!("Search results for '{}':", query);
+                println!("{:<20} {:<15} {:<30}", "ID", "Type", "Title");
+                println!("{}", "=".repeat(65));
+                for node in results {
+                    println!("{:<20} {:<15} {:<30}", node.id, node.node_type, node.title);
+                }
             }
         }
     }
