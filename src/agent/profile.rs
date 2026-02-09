@@ -78,15 +78,20 @@ impl AgentProfile {
         // Security: take from parent if not set in child
         // Simple heuristic: if child has default values, use parent's
         if self.security.allowed_paths == vec!["*"] && parent.security.allowed_paths != vec!["*"] {
-            self.security.allowed_paths.clone_from(&parent.security.allowed_paths);
+            self.security
+                .allowed_paths
+                .clone_from(&parent.security.allowed_paths);
         }
         if self.security.denied_paths.is_empty() && !parent.security.denied_paths.is_empty() {
-            self.security.denied_paths.clone_from(&parent.security.denied_paths);
+            self.security
+                .denied_paths
+                .clone_from(&parent.security.denied_paths);
         }
         if self.security.allowed_commands == vec!["*"]
             && parent.security.allowed_commands != vec!["*"]
         {
-            self.security.allowed_commands
+            self.security
+                .allowed_commands
                 .clone_from(&parent.security.allowed_commands);
         }
 

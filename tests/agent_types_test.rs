@@ -1,11 +1,11 @@
-use rustagent::agent::{Agent, AgentContext, AgentId, AgentOutcome};
+use async_trait::async_trait;
 use rustagent::agent::profile::AgentProfile;
-use rustagent::graph::{GraphNode, NodeStatus, EdgeType};
+use rustagent::agent::{Agent, AgentContext, AgentId, AgentOutcome};
+use rustagent::graph::{EdgeType, GraphNode, NodeStatus};
 use rustagent::security::SecurityScope;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use async_trait::async_trait;
 
 /// Mock agent for testing trait implementation
 struct MockAgent {
@@ -248,10 +248,7 @@ impl rustagent::graph::store::GraphStore for MockGraphStore {
         Ok(vec![])
     }
 
-    async fn get_children(
-        &self,
-        _node_id: &str,
-    ) -> anyhow::Result<Vec<(GraphNode, EdgeType)>> {
+    async fn get_children(&self, _node_id: &str) -> anyhow::Result<Vec<(GraphNode, EdgeType)>> {
         Ok(vec![])
     }
 
@@ -263,7 +260,10 @@ impl rustagent::graph::store::GraphStore for MockGraphStore {
         Ok(vec![])
     }
 
-    async fn get_full_graph(&self, _goal_id: &str) -> anyhow::Result<rustagent::graph::store::WorkGraph> {
+    async fn get_full_graph(
+        &self,
+        _goal_id: &str,
+    ) -> anyhow::Result<rustagent::graph::store::WorkGraph> {
         Ok(rustagent::graph::store::WorkGraph {
             nodes: vec![],
             edges: vec![],

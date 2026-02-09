@@ -65,13 +65,19 @@ fn test_agent_profile_deserialize() {
 
     assert_eq!(profile.name, "coder");
     assert_eq!(profile.role, "Implementation specialist");
-    assert_eq!(profile.system_prompt, "You are a code implementation specialist");
+    assert_eq!(
+        profile.system_prompt,
+        "You are a code implementation specialist"
+    );
     assert_eq!(profile.allowed_tools, vec!["file", "shell"]);
     assert_eq!(profile.turn_limit, Some(50));
     assert_eq!(profile.token_budget, Some(100000));
     assert_eq!(profile.security.allowed_paths, vec!["/project"]);
     assert_eq!(profile.security.allowed_commands, vec!["ls", "cat"]);
-    assert_eq!(profile.llm.model, Some("claude-3-sonnet-20250219".to_string()));
+    assert_eq!(
+        profile.llm.model,
+        Some("claude-3-sonnet-20250219".to_string())
+    );
     assert_eq!(profile.llm.temperature, Some(0.7));
     assert_eq!(profile.llm.max_tokens, Some(4096));
 }
@@ -237,7 +243,11 @@ fn test_agent_profile_inheritance_system_prompt_appends() {
     child.apply_inheritance(&parent);
 
     assert!(child.system_prompt.contains("Parent instructions"));
-    assert!(child.system_prompt.contains("Project-Specific Instructions"));
+    assert!(
+        child
+            .system_prompt
+            .contains("Project-Specific Instructions")
+    );
     assert!(child.system_prompt.contains("Child instructions"));
 }
 
