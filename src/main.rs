@@ -691,25 +691,37 @@ async fn main() -> anyhow::Result<()> {
                             rustagent::graph::interchange::ImportStrategy::Merge
                         };
 
-                        match tokio::runtime::Handle::current().block_on(
-                            rustagent::graph::interchange::import_goal(
-                                &graph_store,
-                                &content,
-                                strategy,
-                            ),
-                        ) {
+                        match rustagent::graph::interchange::import_goal(
+                            &graph_store,
+                            &content,
+                            strategy,
+                        )
+                        .await
+                        {
                             Ok(result) => {
-                                if dry_run {
-                                    println!("[DRY RUN] Changes that would be applied:");
-                                }
-                                println!("  Added nodes: {}", result.added_nodes);
-                                println!("  Added edges: {}", result.added_edges);
-                                println!("  Unchanged: {}", result.unchanged);
-                                if !result.conflicts.is_empty() {
-                                    println!("  Conflicts: {}", result.conflicts.len());
-                                }
-                                if !result.skipped_edges.is_empty() {
-                                    println!("  Skipped edges: {}", result.skipped_edges.len());
+                                if !dry_run {
+                                    println!("  Added nodes: {}", result.added_nodes);
+                                    println!("  Added edges: {}", result.added_edges);
+                                    println!("  Unchanged: {}", result.unchanged);
+                                    if !result.conflicts.is_empty() {
+                                        println!("  Conflicts: {}", result.conflicts.len());
+                                    }
+                                    if !result.skipped_edges.is_empty() {
+                                        println!("  Skipped edges: {}", result.skipped_edges.len());
+                                    }
+                                } else {
+                                    // Parse the TOML and show what would be imported
+                                    match toml::from_str::<rustagent::graph::interchange::GoalFile>(
+                                        &content,
+                                    ) {
+                                        Ok(goal_file) => {
+                                            println!("[DRY RUN] Changes that would be applied:");
+                                            println!("  Nodes to process: {}", goal_file.nodes.len());
+                                            println!("  Edges to process: {}", goal_file.edges.len());
+                                            println!("  Import strategy: {:?}", strategy);
+                                        }
+                                        Err(e) => println!("Failed to parse TOML: {}", e),
+                                    }
                                 }
                             }
                             Err(e) => println!("Import failed: {}", e),
@@ -719,9 +731,9 @@ async fn main() -> anyhow::Result<()> {
                 },
                 GraphAction::Diff { path } => match std::fs::read_to_string(&path) {
                     Ok(content) => {
-                        match tokio::runtime::Handle::current().block_on(
-                            rustagent::graph::interchange::diff_goal(&graph_store, &content),
-                        ) {
+                        match rustagent::graph::interchange::diff_goal(&graph_store, &content)
+                            .await
+                        {
                             Ok(result) => {
                                 println!("Diff results for {}:", path);
                                 if !result.added_nodes.is_empty() {

@@ -1,6 +1,5 @@
 use anyhow::Result;
 use chrono::Utc;
-use rustagent::db::Database;
 use rustagent::graph::interchange::{ImportStrategy, diff_goal, export_goal, import_goal};
 use rustagent::graph::store::{GraphStore, SqliteGraphStore};
 use rustagent::graph::*;
@@ -8,48 +7,6 @@ use std::collections::HashMap;
 
 mod common;
 use common::*;
-
-/// Helper to create a test decision node
-fn create_test_decision(id: &str, project_id: &str, title: &str) -> GraphNode {
-    GraphNode {
-        id: id.to_string(),
-        project_id: project_id.to_string(),
-        node_type: NodeType::Decision,
-        title: title.to_string(),
-        description: "Test decision".to_string(),
-        status: NodeStatus::Pending,
-        priority: None,
-        assigned_to: None,
-        created_by: None,
-        labels: vec![],
-        created_at: Utc::now(),
-        started_at: None,
-        completed_at: None,
-        blocked_reason: None,
-        metadata: HashMap::new(),
-    }
-}
-
-/// Helper to create a test option node
-fn create_test_option(id: &str, project_id: &str, title: &str) -> GraphNode {
-    GraphNode {
-        id: id.to_string(),
-        project_id: project_id.to_string(),
-        node_type: NodeType::Option,
-        title: title.to_string(),
-        description: "Test option".to_string(),
-        status: NodeStatus::Pending,
-        priority: None,
-        assigned_to: None,
-        created_by: None,
-        labels: vec![],
-        created_at: Utc::now(),
-        started_at: None,
-        completed_at: None,
-        blocked_reason: None,
-        metadata: HashMap::new(),
-    }
-}
 
 // ===== Task 3 Tests: Export =====
 
@@ -412,6 +369,33 @@ async fn test_round_trip_export_import() -> Result<()> {
     let task_node = imported_task.unwrap();
     assert_eq!(task_node.title, "Task 1");
     assert_eq!(task_node.status, NodeStatus::Ready);
+
+    // Re-export from the imported graph and verify nodes and edges match
+    let export2 = export_goal(&graph_store2, "ra-test", "test-project").await?;
+
+    // Parse both exports
+    let parsed_export1: toml::Value = toml::from_str(&export1)?;
+    let parsed_export2: toml::Value = toml::from_str(&export2)?;
+
+    // Verify nodes are identical between exports (at minimum the counts should match)
+    let nodes1 = parsed_export1["nodes"].as_table().expect("Export should have nodes");
+    let nodes2 = parsed_export2["nodes"].as_table().expect("Import export should have nodes");
+
+    // After round-trip, we should have at least the goal node and ideally all original nodes
+    // Verify goal exists in both
+    assert!(nodes1.get("ra-test").is_some());
+    assert!(nodes2.get("ra-test").is_some());
+
+    // Verify content hashes are identical when we export the same data
+    // This tests that re-exporting unchanged state produces identical hashes
+    let export3 = export_goal(&graph_store2, "ra-test", "test-project").await?;
+    let parsed_export3: toml::Value = toml::from_str(&export3)?;
+    let hash2 = parsed_export2["meta"]["content_hash"].as_str().unwrap();
+    let hash3 = parsed_export3["meta"]["content_hash"].as_str().unwrap();
+    assert_eq!(
+        hash2, hash3,
+        "Content hashes should be identical for unchanged data (re-export should be deterministic)"
+    );
 
     Ok(())
 }

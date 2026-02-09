@@ -3,7 +3,7 @@
 /// This module provides deterministic, git-friendly graph serialization.
 /// TOML files are per-goal, with sorted keys (BTreeMap) for reproducible output.
 /// Content hash enables detecting changes, and conflict strategies handle imports.
-use crate::graph::store::GraphStore;
+use crate::graph::store::{GraphStore, SqliteGraphStore};
 use crate::graph::{EdgeType, GraphEdge, GraphNode};
 use anyhow::{Context, Result};
 use chrono::Utc;
@@ -118,7 +118,7 @@ pub struct DiffResult {
 /// - Content hash computed from nodes + edges
 /// - Null/empty fields omitted
 pub async fn export_goal(
-    graph_store: &dyn GraphStore,
+    graph_store: &SqliteGraphStore,
     goal_id: &str,
     project_name: &str,
 ) -> Result<String> {
@@ -158,8 +158,8 @@ pub async fn export_goal(
         .to_hex()
         .to_string();
 
-    // Build the goal file with deterministic timestamp
-    // We use a fixed export time to ensure byte-for-byte identical exports
+    // Record the export time (will vary on each export, so not byte-identical for timestamps)
+    // The content hash remains deterministic based on node/edge data
     let exported_at = Utc::now().to_rfc3339();
 
     let goal_file = GoalFile {
@@ -188,7 +188,7 @@ pub async fn export_goal(
 ///
 /// All writes in a single BEGIN IMMEDIATE transaction.
 pub async fn import_goal(
-    graph_store: &dyn GraphStore,
+    graph_store: &SqliteGraphStore,
     toml_content: &str,
     strategy: ImportStrategy,
 ) -> Result<ImportResult> {
@@ -203,13 +203,16 @@ pub async fn import_goal(
         unchanged: 0,
     };
 
-    // Process nodes
+    // Collect nodes to import in a single transaction
+    let mut nodes_to_add = Vec::new();
+
+    // Process nodes to determine what to add
     for (node_id, toml_node) in &goal_file.nodes {
         match graph_store.get_node(node_id).await? {
             None => {
-                // New node: create it
+                // New node: will add in transaction
                 let node = toml_to_graph_node(node_id, toml_node)?;
-                graph_store.create_node(&node).await?;
+                nodes_to_add.push(node);
                 result.added_nodes += 1;
             }
             Some(existing_node) => {
@@ -251,13 +254,8 @@ pub async fn import_goal(
         }
     }
 
-    // Process edges
-    let mut node_ids_in_db = std::collections::HashSet::new();
-    for node_id in goal_file.nodes.keys() {
-        if graph_store.get_node(node_id).await.is_ok() {
-            node_ids_in_db.insert(node_id.clone());
-        }
-    }
+    // Collect edges to import
+    let mut edges_to_add = Vec::new();
 
     for (edge_id, toml_edge) in &goal_file.edges {
         // Check if both endpoints exist
@@ -272,7 +270,7 @@ pub async fn import_goal(
             continue;
         }
 
-        // Try to add the edge (idempotent)
+        // Convert to GraphEdge
         let edge_type: EdgeType = toml_edge.edge_type.parse()?;
         let edge = GraphEdge {
             id: edge_id.clone(),
@@ -284,15 +282,15 @@ pub async fn import_goal(
                 .with_timezone(&Utc),
         };
 
-        // Only add if not already exists
-        // Note: GraphStore doesn't have a method to check edge existence,
-        // so we rely on add_edge being idempotent or handling duplicates gracefully
-        match graph_store.add_edge(&edge).await {
-            Ok(()) => result.added_edges += 1,
-            Err(_) => {
-                // Edge might already exist, that's okay
-            }
-        }
+        edges_to_add.push(edge);
+        result.added_edges += 1;
+    }
+
+    // Import all nodes and edges in a single transaction
+    if !nodes_to_add.is_empty() || !edges_to_add.is_empty() {
+        graph_store
+            .import_nodes_and_edges(nodes_to_add, edges_to_add)
+            .await?;
     }
 
     Ok(result)
@@ -301,7 +299,7 @@ pub async fn import_goal(
 /// Diff TOML file against current DB state
 ///
 /// Shows what would change if the TOML were imported without making changes.
-pub async fn diff_goal(graph_store: &dyn GraphStore, toml_content: &str) -> Result<DiffResult> {
+pub async fn diff_goal(graph_store: &SqliteGraphStore, toml_content: &str) -> Result<DiffResult> {
     let goal_file: GoalFile =
         toml::from_str(toml_content).context("Failed to parse TOML goal file")?;
 
@@ -463,9 +461,10 @@ fn detect_node_changes(db_node: &GraphNode, toml_node: &TomlNode) -> Result<Vec<
     if db_node.created_by != toml_node.created_by {
         changed.push("created_by".to_string());
     }
-    if (db_node.labels.is_empty() && toml_node.labels.is_none())
-        || (Some(&db_node.labels) != toml_node.labels.as_ref())
-    {
+    // Check labels: both empty/None means no change
+    let db_has_labels = !db_node.labels.is_empty();
+    let toml_has_labels = toml_node.labels.is_some() && !toml_node.labels.as_ref().unwrap().is_empty();
+    if db_has_labels != toml_has_labels || (db_has_labels && Some(&db_node.labels) != toml_node.labels.as_ref()) {
         changed.push("labels".to_string());
     }
     if db_node.blocked_reason != toml_node.blocked_reason {

@@ -85,6 +85,27 @@ pub fn create_test_observation(
     }
 }
 
+/// Helper to create a test decision node
+pub fn create_test_decision(id: &str, project_id: &str, title: &str) -> GraphNode {
+    GraphNode {
+        id: id.to_string(),
+        project_id: project_id.to_string(),
+        node_type: NodeType::Decision,
+        title: title.to_string(),
+        description: "Test decision".to_string(),
+        status: NodeStatus::Pending,
+        priority: None,
+        assigned_to: None,
+        created_by: None,
+        labels: vec![],
+        created_at: Utc::now(),
+        started_at: None,
+        completed_at: None,
+        blocked_reason: None,
+        metadata: HashMap::new(),
+    }
+}
+
 /// Helper to set up a test database with a project (graph store only)
 pub async fn setup_test_env() -> Result<(Database, SqliteGraphStore)> {
     let db = Database::open_in_memory().await?;

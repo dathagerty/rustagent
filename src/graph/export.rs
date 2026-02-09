@@ -67,53 +67,65 @@ async fn generate_adr_markdown(
     // Options Considered
     content.push_str("## Options Considered\n\n");
 
-    // Get options connected via LeadsTo edges
-    let options = graph_store
+    // Get all edges once (both LeadsTo for options and Chosen/Rejected for status)
+    let all_edges = graph_store
         .get_edges(&decision.id, crate::graph::store::EdgeDirection::Outgoing)
         .await?;
 
-    let mut has_options = false;
-    for (edge, option_node) in &options {
+    // Separate edges by type for efficient lookup
+    let mut option_edges = Vec::new();
+    let mut status_edges_map: std::collections::HashMap<String, Vec<_>> = std::collections::HashMap::new();
+
+    for (edge, node) in &all_edges {
         if edge.edge_type == crate::graph::EdgeType::LeadsTo {
-            has_options = true;
-            // Check if this option was chosen or rejected via Chosen/Rejected edges
-            let status_edges = graph_store
-                .get_edges(&decision.id, crate::graph::store::EdgeDirection::Outgoing)
-                .await?;
+            option_edges.push((edge, node));
+        } else if edge.edge_type == crate::graph::EdgeType::Chosen
+            || edge.edge_type == crate::graph::EdgeType::Rejected
+        {
+            status_edges_map
+                .entry(edge.to_node.clone())
+                .or_insert_with(Vec::new)
+                .push(edge);
+        }
+    }
 
-            let mut is_chosen = false;
-            let mut rationale = String::new();
+    let mut has_options = false;
+    for (_edge, option_node) in option_edges {
+        has_options = true;
 
-            for (status_edge, _node) in &status_edges {
-                if status_edge.edge_type == crate::graph::EdgeType::Chosen
-                    && status_edge.to_node == option_node.id
-                {
+        // Look up status for this option from pre-fetched edges
+        let mut is_chosen = false;
+        let mut rationale = String::new();
+
+        if let Some(status_edges) = status_edges_map.get(&option_node.id) {
+            for status_edge in status_edges {
+                if status_edge.edge_type == crate::graph::EdgeType::Chosen {
                     is_chosen = true;
                     if let Some(label) = &status_edge.label {
                         rationale = label.clone();
                     }
                 }
             }
+        }
 
-            let status_label = if is_chosen { "CHOSEN" } else { "REJECTED" };
+        let status_label = if is_chosen { "CHOSEN" } else { "REJECTED" };
 
-            content.push_str(&format!("### {} ({})\n\n", option_node.title, status_label));
+        content.push_str(&format!("### {} ({})\n\n", option_node.title, status_label));
 
-            if !option_node.description.is_empty() {
-                content.push_str(&format!("{}\n\n", option_node.description));
-            }
+        if !option_node.description.is_empty() {
+            content.push_str(&format!("{}\n\n", option_node.description));
+        }
 
-            if !rationale.is_empty() {
-                content.push_str(&format!("**Rationale:** {}\n\n", rationale));
-            }
+        if !rationale.is_empty() {
+            content.push_str(&format!("**Rationale:** {}\n\n", rationale));
+        }
 
-            // Add pros/cons from metadata if available
-            if let Some(pros) = option_node.metadata.get("pros") {
-                content.push_str(&format!("**Pros:**\n{}\n\n", pros));
-            }
-            if let Some(cons) = option_node.metadata.get("cons") {
-                content.push_str(&format!("**Cons:**\n{}\n\n", cons));
-            }
+        // Add pros/cons from metadata if available
+        if let Some(pros) = option_node.metadata.get("pros") {
+            content.push_str(&format!("**Pros:**\n{}\n\n", pros));
+        }
+        if let Some(cons) = option_node.metadata.get("cons") {
+            content.push_str(&format!("**Cons:**\n{}\n\n", cons));
         }
     }
 

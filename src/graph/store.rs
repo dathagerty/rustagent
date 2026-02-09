@@ -1012,3 +1012,87 @@ impl GraphStore for SqliteGraphStore {
         Ok(seq)
     }
 }
+
+impl SqliteGraphStore {
+    /// Import nodes and edges in a single BEGIN IMMEDIATE transaction
+    /// This ensures atomic import: either all succeed or all fail
+    pub async fn import_nodes_and_edges(
+        &self,
+        nodes: Vec<GraphNode>,
+        edges: Vec<GraphEdge>,
+    ) -> Result<()> {
+        let db = self.db.clone();
+
+        db.connection()
+            .call(move |conn| {
+                let tx =
+                    conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+
+                // Insert all nodes (skip if they already exist)
+                // Note: We don't recreate parent-child edges here because they should be
+                // explicitly included in the edges vector and will be inserted separately
+                for node in &nodes {
+                    let labels_json = serde_json::to_string(&node.labels)
+                        .map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+                    let metadata_json = serde_json::to_string(&node.metadata)
+                        .map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+                    let created_at = node.created_at.to_rfc3339();
+                    let started_at = node.started_at.map(|dt| dt.to_rfc3339());
+                    let completed_at = node.completed_at.map(|dt| dt.to_rfc3339());
+                    let priority = node.priority.map(|p| p.to_string());
+                    let node_type_str = node.node_type.to_string();
+                    let status_str = node.status.to_string();
+
+                    tx.execute(
+                        "INSERT OR IGNORE INTO nodes (
+                            id, project_id, node_type, title, description, status,
+                            priority, assigned_to, created_by, blocked_reason,
+                            labels, created_at, started_at, completed_at, metadata
+                        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+                        rusqlite::params![
+                            &node.id,
+                            &node.project_id,
+                            &node_type_str,
+                            &node.title,
+                            &node.description,
+                            &status_str,
+                            &priority,
+                            &node.assigned_to,
+                            &node.created_by,
+                            &node.blocked_reason,
+                            &labels_json,
+                            &created_at,
+                            &started_at,
+                            &completed_at,
+                            &metadata_json,
+                        ],
+                    )?;
+                }
+
+                // Insert all edges (ignore if already exist)
+                for edge in &edges {
+                    let edge_type_str = edge.edge_type.to_string();
+                    let created_at = edge.created_at.to_rfc3339();
+
+                    tx.execute(
+                        "INSERT OR IGNORE INTO edges (id, edge_type, from_node, to_node, label, created_at)
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                        rusqlite::params![
+                            &edge.id,
+                            &edge_type_str,
+                            &edge.from_node,
+                            &edge.to_node,
+                            &edge.label,
+                            &created_at,
+                        ],
+                    )?;
+                }
+
+                tx.commit()?;
+                Ok::<(), tokio_rusqlite::Error>(())
+            })
+            .await?;
+
+        Ok(())
+    }
+}

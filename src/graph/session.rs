@@ -124,35 +124,7 @@ impl SessionStore {
                 )?;
 
                 let session: Option<Session> = stmt
-                    .query_row([&session_id_owned], |row| {
-                        let started_at_str: String = row.get(3)?;
-                        let started_at = chrono::DateTime::parse_from_rfc3339(&started_at_str)
-                            .ok()
-                            .map(|dt| dt.with_timezone(&Utc))
-                            .ok_or(rusqlite::Error::InvalidQuery)?;
-
-                        let ended_at_str: Option<String> = row.get(4)?;
-                        let ended_at = ended_at_str.and_then(|s| {
-                            chrono::DateTime::parse_from_rfc3339(&s)
-                                .ok()
-                                .map(|dt| dt.with_timezone(&Utc))
-                        });
-
-                        let agent_ids_json: String = row.get(6)?;
-                        let agent_ids: Vec<String> =
-                            serde_json::from_str(&agent_ids_json).unwrap_or_default();
-
-                        Ok(Session {
-                            id: row.get(0)?,
-                            project_id: row.get(1)?,
-                            goal_id: row.get(2)?,
-                            started_at,
-                            ended_at,
-                            handoff_notes: row.get(5)?,
-                            agent_ids,
-                            summary: row.get(7)?,
-                        })
-                    })
+                    .query_row([&session_id_owned], |row| map_session_row(row))
                     .optional()?;
 
                 Ok(session)
@@ -178,35 +150,7 @@ impl SessionStore {
                 )?;
 
                 let session: Option<Session> = stmt
-                    .query_row([&goal_id_owned], |row| {
-                        let started_at_str: String = row.get(3)?;
-                        let started_at = chrono::DateTime::parse_from_rfc3339(&started_at_str)
-                            .ok()
-                            .map(|dt| dt.with_timezone(&Utc))
-                            .ok_or(rusqlite::Error::InvalidQuery)?;
-
-                        let ended_at_str: Option<String> = row.get(4)?;
-                        let ended_at = ended_at_str.and_then(|s| {
-                            chrono::DateTime::parse_from_rfc3339(&s)
-                                .ok()
-                                .map(|dt| dt.with_timezone(&Utc))
-                        });
-
-                        let agent_ids_json: String = row.get(6)?;
-                        let agent_ids: Vec<String> =
-                            serde_json::from_str(&agent_ids_json).unwrap_or_default();
-
-                        Ok(Session {
-                            id: row.get(0)?,
-                            project_id: row.get(1)?,
-                            goal_id: row.get(2)?,
-                            started_at,
-                            ended_at,
-                            handoff_notes: row.get(5)?,
-                            agent_ids,
-                            summary: row.get(7)?,
-                        })
-                    })
+                    .query_row([&goal_id_owned], |row| map_session_row(row))
                     .optional()?;
 
                 Ok(session)
@@ -231,35 +175,7 @@ impl SessionStore {
                 )?;
 
                 let mut sessions = vec![];
-                let rows = stmt.query_map([&goal_id_owned], |row| {
-                    let started_at_str: String = row.get(3)?;
-                    let started_at = chrono::DateTime::parse_from_rfc3339(&started_at_str)
-                        .ok()
-                        .map(|dt| dt.with_timezone(&Utc))
-                        .ok_or(rusqlite::Error::InvalidQuery)?;
-
-                    let ended_at_str: Option<String> = row.get(4)?;
-                    let ended_at = ended_at_str.and_then(|s| {
-                        chrono::DateTime::parse_from_rfc3339(&s)
-                            .ok()
-                            .map(|dt| dt.with_timezone(&Utc))
-                    });
-
-                    let agent_ids_json: String = row.get(6)?;
-                    let agent_ids: Vec<String> =
-                        serde_json::from_str(&agent_ids_json).unwrap_or_default();
-
-                    Ok(Session {
-                        id: row.get(0)?,
-                        project_id: row.get(1)?,
-                        goal_id: row.get(2)?,
-                        started_at,
-                        ended_at,
-                        handoff_notes: row.get(5)?,
-                        agent_ids,
-                        summary: row.get(7)?,
-                    })
-                })?;
+                let rows = stmt.query_map([&goal_id_owned], map_session_row)?;
 
                 for session_result in rows {
                     sessions.push(session_result?);
@@ -270,6 +186,36 @@ impl SessionStore {
             .await
             .map_err(|e| anyhow!("database error: {}", e))
     }
+}
+
+/// Map a database row to a Session struct
+fn map_session_row(row: &rusqlite::Row) -> rusqlite::Result<Session> {
+    let started_at_str: String = row.get(3)?;
+    let started_at = chrono::DateTime::parse_from_rfc3339(&started_at_str)
+        .ok()
+        .map(|dt| dt.with_timezone(&Utc))
+        .ok_or(rusqlite::Error::InvalidQuery)?;
+
+    let ended_at_str: Option<String> = row.get(4)?;
+    let ended_at = ended_at_str.and_then(|s| {
+        chrono::DateTime::parse_from_rfc3339(&s)
+            .ok()
+            .map(|dt| dt.with_timezone(&Utc))
+    });
+
+    let agent_ids_json: String = row.get(6)?;
+    let agent_ids: Vec<String> = serde_json::from_str(&agent_ids_json).unwrap_or_default();
+
+    Ok(Session {
+        id: row.get(0)?,
+        project_id: row.get(1)?,
+        goal_id: row.get(2)?,
+        started_at,
+        ended_at,
+        handoff_notes: row.get(5)?,
+        agent_ids,
+        summary: row.get(7)?,
+    })
 }
 
 /// Generate handoff notes from the current graph state
@@ -351,8 +297,8 @@ fn generate_handoff_notes(conn: &rusqlite::Connection, goal_id: &str) -> rusqlit
     if remaining_nodes.is_empty() {
         notes.push_str("(none)\n");
     } else {
-        for (id, title, _status) in remaining_nodes {
-            notes.push_str(&format!("- {}: {}\n", id, title));
+        for (id, title, status) in remaining_nodes {
+            notes.push_str(&format!("- {}: {} [{}]\n", id, title, status));
         }
     }
     notes.push('\n');
