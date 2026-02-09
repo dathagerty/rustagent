@@ -60,6 +60,16 @@ enum Commands {
         /// Search query
         query: String,
     },
+    /// View sessions and handoff notes
+    Sessions {
+        #[command(subcommand)]
+        action: Option<SessionAction>,
+    },
+    /// Import/export graph data
+    Graph {
+        #[command(subcommand)]
+        action: GraphAction,
+    },
 }
 
 #[derive(Subcommand)]
@@ -110,6 +120,60 @@ enum DecisionAction {
     History,
     /// Show decision details
     Show { id: String },
+    /// Export decisions as ADR markdown files
+    Export {
+        /// Output directory for markdown files
+        #[arg(long)]
+        output: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+enum SessionAction {
+    /// List sessions for current goal
+    List {
+        /// Goal ID (if omitted, uses current goal context)
+        #[arg(long)]
+        goal: Option<String>,
+    },
+    /// Show most recent handoff notes
+    Latest {
+        /// Goal ID (if omitted, uses current goal context)
+        #[arg(long)]
+        goal: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+enum GraphAction {
+    /// Export goals to TOML files
+    Export {
+        /// Goal ID (if omitted, exports all goals)
+        #[arg(long)]
+        goal: Option<String>,
+        /// Output directory
+        #[arg(long)]
+        output: Option<String>,
+    },
+    /// Import TOML files
+    Import {
+        /// Path to TOML file
+        path: String,
+        /// Show changes without applying
+        #[arg(long)]
+        dry_run: bool,
+        /// Use file version in conflicts
+        #[arg(long)]
+        theirs: bool,
+        /// Keep database version in conflicts
+        #[arg(long)]
+        ours: bool,
+    },
+    /// Diff TOML file against DB
+    Diff {
+        /// Path to TOML file
+        path: String,
+    },
 }
 
 /// Find config file in standard locations
@@ -426,8 +490,36 @@ async fn main() -> anyhow::Result<()> {
                         println!("Decision '{}' not found", id);
                     }
                 }
+                Some(DecisionAction::Export { output }) => {
+                    if let Some(proj_id) = cli.project {
+                        let output_dir = output.unwrap_or_else(|| ".".to_string());
+                        let output_path = std::path::PathBuf::from(&output_dir);
+
+                        match rustagent::graph::export::export_adrs(
+                            &graph_store,
+                            &proj_id,
+                            &output_path,
+                        )
+                        .await
+                        {
+                            Ok(files) => {
+                                println!("Exported {} decision(s) to {}:", files.len(), output_dir);
+                                for file in files {
+                                    println!("  {}", file.display());
+                                }
+                            }
+                            Err(e) => {
+                                println!("Export failed: {}", e);
+                            }
+                        }
+                    } else {
+                        println!("Project must be specified with --project flag");
+                    }
+                }
                 None => {
-                    println!("Please specify a decision action: list, now, history, or show");
+                    println!(
+                        "Please specify a decision action: list, now, history, show, or export"
+                    );
                 }
             }
         }
@@ -481,6 +573,189 @@ async fn main() -> anyhow::Result<()> {
                 for node in results {
                     println!("{:<20} {:<15} {:<30}", node.id, node.node_type, node.title);
                 }
+            }
+        }
+        Commands::Sessions { action } => {
+            // Open database
+            let db_path = db_path()?;
+            let database = db::Database::open(&db_path).await?;
+            let session_store = rustagent::graph::session::SessionStore::new(database.clone());
+
+            match action {
+                Some(SessionAction::List { goal }) => {
+                    if let Some(goal_id) = goal {
+                        match session_store.list_sessions(&goal_id).await {
+                            Ok(sessions) => {
+                                if sessions.is_empty() {
+                                    println!("No sessions found for goal {}", goal_id);
+                                } else {
+                                    println!("Sessions for {}:", goal_id);
+                                    println!("{:<20} {:<25} {:<15}", "ID", "Started", "Status");
+                                    println!("{}", "=".repeat(60));
+                                    for session in sessions {
+                                        let status = if session.ended_at.is_some() {
+                                            "Ended"
+                                        } else {
+                                            "Active"
+                                        };
+                                        println!(
+                                            "{:<20} {:<25} {:<15}",
+                                            session.id,
+                                            session.started_at.format("%Y-%m-%d %H:%M"),
+                                            status
+                                        );
+                                    }
+                                }
+                            }
+                            Err(e) => println!("Error listing sessions: {}", e),
+                        }
+                    } else {
+                        println!("Goal ID must be specified with --goal flag");
+                    }
+                }
+                Some(SessionAction::Latest { goal }) => {
+                    if let Some(goal_id) = goal {
+                        match session_store.get_latest_session(&goal_id).await {
+                            Ok(Some(session)) => {
+                                println!("Latest session for {}:", goal_id);
+                                println!("  ID: {}", session.id);
+                                println!("  Started: {}", session.started_at);
+                                if let Some(ended) = session.ended_at {
+                                    println!("  Ended: {}", ended);
+                                }
+                                if let Some(notes) = session.handoff_notes {
+                                    println!("\nHandoff Notes:");
+                                    println!("{}", notes);
+                                }
+                            }
+                            Ok(None) => println!("No sessions found for goal {}", goal_id),
+                            Err(e) => println!("Error retrieving session: {}", e),
+                        }
+                    } else {
+                        println!("Goal ID must be specified with --goal flag");
+                    }
+                }
+                None => {
+                    println!("Please specify a session action: list or latest");
+                }
+            }
+        }
+        Commands::Graph { action } => {
+            // Open database
+            let db_path = db_path()?;
+            let database = db::Database::open(&db_path).await?;
+            let graph_store = rustagent::graph::store::SqliteGraphStore::new(database.clone());
+
+            match action {
+                GraphAction::Export { goal, output } => {
+                    if let Some(goal_id) = goal {
+                        let project_name =
+                            cli.project.clone().unwrap_or_else(|| "unknown".to_string());
+                        match rustagent::graph::interchange::export_goal(
+                            &graph_store,
+                            &goal_id,
+                            &project_name,
+                        )
+                        .await
+                        {
+                            Ok(toml_content) => {
+                                if let Some(output_path) = output {
+                                    // Write to file
+                                    match std::fs::write(&output_path, &toml_content) {
+                                        Ok(_) => println!("Exported goal to {}", output_path),
+                                        Err(e) => println!("Failed to write file: {}", e),
+                                    }
+                                } else {
+                                    // Print to stdout
+                                    println!("{}", toml_content);
+                                }
+                            }
+                            Err(e) => println!("Export failed: {}", e),
+                        }
+                    } else {
+                        println!("Goal ID must be specified with --goal flag");
+                    }
+                }
+                GraphAction::Import {
+                    path,
+                    dry_run,
+                    theirs,
+                    ours,
+                } => match std::fs::read_to_string(&path) {
+                    Ok(content) => {
+                        let strategy = if theirs {
+                            rustagent::graph::interchange::ImportStrategy::Theirs
+                        } else if ours {
+                            rustagent::graph::interchange::ImportStrategy::Ours
+                        } else {
+                            rustagent::graph::interchange::ImportStrategy::Merge
+                        };
+
+                        match tokio::runtime::Handle::current().block_on(
+                            rustagent::graph::interchange::import_goal(
+                                &graph_store,
+                                &content,
+                                strategy,
+                            ),
+                        ) {
+                            Ok(result) => {
+                                if dry_run {
+                                    println!("[DRY RUN] Changes that would be applied:");
+                                }
+                                println!("  Added nodes: {}", result.added_nodes);
+                                println!("  Added edges: {}", result.added_edges);
+                                println!("  Unchanged: {}", result.unchanged);
+                                if !result.conflicts.is_empty() {
+                                    println!("  Conflicts: {}", result.conflicts.len());
+                                }
+                                if !result.skipped_edges.is_empty() {
+                                    println!("  Skipped edges: {}", result.skipped_edges.len());
+                                }
+                            }
+                            Err(e) => println!("Import failed: {}", e),
+                        }
+                    }
+                    Err(e) => println!("Failed to read file: {}", e),
+                },
+                GraphAction::Diff { path } => match std::fs::read_to_string(&path) {
+                    Ok(content) => {
+                        match tokio::runtime::Handle::current().block_on(
+                            rustagent::graph::interchange::diff_goal(&graph_store, &content),
+                        ) {
+                            Ok(result) => {
+                                println!("Diff results for {}:", path);
+                                if !result.added_nodes.is_empty() {
+                                    println!("  Added nodes: {}", result.added_nodes.len());
+                                    for node_id in &result.added_nodes {
+                                        println!("    + {}", node_id);
+                                    }
+                                }
+                                if !result.changed_nodes.is_empty() {
+                                    println!("  Changed nodes: {}", result.changed_nodes.len());
+                                    for (node_id, fields) in &result.changed_nodes {
+                                        println!("    ~ {} ({})", node_id, fields.join(", "));
+                                    }
+                                }
+                                if !result.removed_nodes.is_empty() {
+                                    println!("  Removed nodes: {}", result.removed_nodes.len());
+                                    for node_id in &result.removed_nodes {
+                                        println!("    - {}", node_id);
+                                    }
+                                }
+                                if !result.added_edges.is_empty() {
+                                    println!("  Added edges: {}", result.added_edges.len());
+                                }
+                                if !result.removed_edges.is_empty() {
+                                    println!("  Removed edges: {}", result.removed_edges.len());
+                                }
+                                println!("  Unchanged nodes: {}", result.unchanged_nodes);
+                                println!("  Unchanged edges: {}", result.unchanged_edges);
+                            }
+                            Err(e) => println!("Diff failed: {}", e),
+                        }
+                    }
+                    Err(e) => println!("Failed to read file: {}", e),
+                },
             }
         }
     }

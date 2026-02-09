@@ -169,7 +169,11 @@ mod tests {
     use super::*;
     use chrono::Duration;
 
-    fn create_test_node(id: &str, created_days_ago: i64, completed_days_ago: Option<i64>) -> GraphNode {
+    fn create_test_node(
+        id: &str,
+        created_days_ago: i64,
+        completed_days_ago: Option<i64>,
+    ) -> GraphNode {
         let now = Utc::now();
         let created_at = now - Duration::days(created_days_ago);
         let completed_at = completed_days_ago.map(|d| now - Duration::days(d));
@@ -276,9 +280,9 @@ mod tests {
     fn test_decay_multiple_nodes() {
         let config = DecayConfig::default();
         let nodes = vec![
-            create_test_node("n1", 10, Some(2)),   // Full
-            create_test_node("n2", 20, Some(15)),  // Summary
-            create_test_node("n3", 50, Some(45)),  // Minimal
+            create_test_node("n1", 10, Some(2)),  // Full
+            create_test_node("n2", 20, Some(15)), // Summary
+            create_test_node("n3", 50, Some(45)), // Minimal
         ];
 
         let decayed = decay_nodes(&nodes, Utc::now(), &config);

@@ -1,15 +1,11 @@
 //! Tests for node decay functionality (P1c.AC4.1 - P1c.AC4.4)
 
 use chrono::{Duration, Utc};
-use rustagent::graph::decay::{decay_node, decay_nodes, DecayConfig, DecayDetail};
+use rustagent::graph::decay::{DecayConfig, DecayDetail, decay_node, decay_nodes};
 use rustagent::graph::{GraphNode, NodeStatus, NodeType};
 use std::collections::HashMap;
 
-fn create_test_node(
-    id: &str,
-    created_days_ago: i64,
-    completed_days_ago: Option<i64>,
-) -> GraphNode {
+fn create_test_node(id: &str, created_days_ago: i64, completed_days_ago: Option<i64>) -> GraphNode {
     let now = Utc::now();
     let created_at = now - Duration::days(created_days_ago);
     let completed_at = completed_days_ago.map(|d| now - Duration::days(d));
@@ -56,8 +52,14 @@ fn test_full_detail_recent_node() {
             metadata,
         } => {
             assert_eq!(description, "Test description with important details");
-            assert_eq!(metadata.get("key_outcome"), Some(&"Important result".to_string()));
-            assert_eq!(metadata.get("context"), Some(&"Additional context".to_string()));
+            assert_eq!(
+                metadata.get("key_outcome"),
+                Some(&"Important result".to_string())
+            );
+            assert_eq!(
+                metadata.get("context"),
+                Some(&"Additional context".to_string())
+            );
         }
         other => panic!("Expected Full detail for recent node, got {:?}", other),
     }
@@ -144,9 +146,9 @@ fn test_configurable_thresholds() {
 fn test_decay_multiple_nodes() {
     let config = DecayConfig::default();
     let nodes = vec![
-        create_test_node("n1", 10, Some(2)),   // Full
-        create_test_node("n2", 20, Some(15)),  // Summary
-        create_test_node("n3", 50, Some(45)),  // Minimal
+        create_test_node("n1", 10, Some(2)),  // Full
+        create_test_node("n2", 20, Some(15)), // Summary
+        create_test_node("n3", 50, Some(45)), // Minimal
     ];
 
     let decayed = decay_nodes(&nodes, Utc::now(), &config);
@@ -177,10 +179,7 @@ fn test_uses_completed_time_for_age() {
         DecayDetail::Full { .. } => {
             // Expected - uses completed_at (2 days old), not created_at (100 days old)
         }
-        other => panic!(
-            "Should use completed_at for age: got {:?}",
-            other
-        ),
+        other => panic!("Should use completed_at for age: got {:?}", other),
     }
 }
 
@@ -198,7 +197,10 @@ fn test_decay_node_without_completion() {
         DecayDetail::Full { .. } => {
             // Expected - uses created_at when completed_at is None
         }
-        other => panic!("Should use created_at when completed_at is None: got {:?}", other),
+        other => panic!(
+            "Should use created_at when completed_at is None: got {:?}",
+            other
+        ),
     }
 }
 
@@ -257,8 +259,10 @@ fn test_full_detail_preserves_all_metadata() {
     let config = DecayConfig::default();
     let mut node = create_test_node("full_meta", 10, Some(1));
 
-    node.metadata.insert("custom_field".to_string(), "custom_value".to_string());
-    node.metadata.insert("tags".to_string(), "a,b,c".to_string());
+    node.metadata
+        .insert("custom_field".to_string(), "custom_value".to_string());
+    node.metadata
+        .insert("tags".to_string(), "a,b,c".to_string());
 
     let decayed = decay_node(&node, Utc::now(), &config);
 
@@ -268,7 +272,10 @@ fn test_full_detail_preserves_all_metadata() {
             metadata,
         } => {
             assert_eq!(metadata.len(), 4);
-            assert_eq!(metadata.get("custom_field"), Some(&"custom_value".to_string()));
+            assert_eq!(
+                metadata.get("custom_field"),
+                Some(&"custom_value".to_string())
+            );
             assert_eq!(metadata.get("tags"), Some(&"a,b,c".to_string()));
         }
         other => panic!("Expected Full detail with all metadata: got {:?}", other),
