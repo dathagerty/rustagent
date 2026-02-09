@@ -124,7 +124,7 @@ impl SessionStore {
                 )?;
 
                 let session: Option<Session> = stmt
-                    .query_row([&session_id_owned], |row| map_session_row(row))
+                    .query_row([&session_id_owned], map_session_row)
                     .optional()?;
 
                 Ok(session)
@@ -150,7 +150,7 @@ impl SessionStore {
                 )?;
 
                 let session: Option<Session> = stmt
-                    .query_row([&goal_id_owned], |row| map_session_row(row))
+                    .query_row([&goal_id_owned], map_session_row)
                     .optional()?;
 
                 Ok(session)

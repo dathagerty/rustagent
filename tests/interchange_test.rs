@@ -1,10 +1,8 @@
 use anyhow::Result;
 use chrono::Utc;
 use rustagent::graph::interchange::{ImportStrategy, diff_goal, export_goal, import_goal};
-use rustagent::graph::store::{GraphStore, SqliteGraphStore};
+use rustagent::graph::store::GraphStore;
 use rustagent::graph::*;
-use std::collections::HashMap;
-
 mod common;
 use common::*;
 
@@ -251,7 +249,7 @@ async fn test_import_skips_edges_with_missing_nodes() -> Result<()> {
     let toml_str = export_goal(&graph_store, "ra-test", "test-project").await?;
 
     // Modify the TOML to add a new node that doesn't exist and an edge to it
-    let mut toml_content = toml_str.clone();
+    let _toml_content = toml_str.clone();
 
     // Parse and modify
     let mut parsed: toml::Value = toml::from_str(&toml_str)?;
@@ -378,8 +376,12 @@ async fn test_round_trip_export_import() -> Result<()> {
     let parsed_export2: toml::Value = toml::from_str(&export2)?;
 
     // Verify nodes are identical between exports (at minimum the counts should match)
-    let nodes1 = parsed_export1["nodes"].as_table().expect("Export should have nodes");
-    let nodes2 = parsed_export2["nodes"].as_table().expect("Import export should have nodes");
+    let nodes1 = parsed_export1["nodes"]
+        .as_table()
+        .expect("Export should have nodes");
+    let nodes2 = parsed_export2["nodes"]
+        .as_table()
+        .expect("Import export should have nodes");
 
     // After round-trip, we should have at least the goal node and ideally all original nodes
     // Verify goal exists in both

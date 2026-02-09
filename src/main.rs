@@ -691,15 +691,28 @@ async fn main() -> anyhow::Result<()> {
                             rustagent::graph::interchange::ImportStrategy::Merge
                         };
 
-                        match rustagent::graph::interchange::import_goal(
-                            &graph_store,
-                            &content,
-                            strategy,
-                        )
-                        .await
-                        {
-                            Ok(result) => {
-                                if !dry_run {
+                        if dry_run {
+                            // Parse the TOML and show what would be imported without writing
+                            match toml::from_str::<rustagent::graph::interchange::GoalFile>(
+                                &content,
+                            ) {
+                                Ok(goal_file) => {
+                                    println!("[DRY RUN] Changes that would be applied:");
+                                    println!("  Nodes to process: {}", goal_file.nodes.len());
+                                    println!("  Edges to process: {}", goal_file.edges.len());
+                                    println!("  Import strategy: {:?}", strategy);
+                                }
+                                Err(e) => println!("Failed to parse TOML: {}", e),
+                            }
+                        } else {
+                            match rustagent::graph::interchange::import_goal(
+                                &graph_store,
+                                &content,
+                                strategy,
+                            )
+                            .await
+                            {
+                                Ok(result) => {
                                     println!("  Added nodes: {}", result.added_nodes);
                                     println!("  Added edges: {}", result.added_edges);
                                     println!("  Unchanged: {}", result.unchanged);
@@ -709,30 +722,16 @@ async fn main() -> anyhow::Result<()> {
                                     if !result.skipped_edges.is_empty() {
                                         println!("  Skipped edges: {}", result.skipped_edges.len());
                                     }
-                                } else {
-                                    // Parse the TOML and show what would be imported
-                                    match toml::from_str::<rustagent::graph::interchange::GoalFile>(
-                                        &content,
-                                    ) {
-                                        Ok(goal_file) => {
-                                            println!("[DRY RUN] Changes that would be applied:");
-                                            println!("  Nodes to process: {}", goal_file.nodes.len());
-                                            println!("  Edges to process: {}", goal_file.edges.len());
-                                            println!("  Import strategy: {:?}", strategy);
-                                        }
-                                        Err(e) => println!("Failed to parse TOML: {}", e),
-                                    }
                                 }
+                                Err(e) => println!("Import failed: {}", e),
                             }
-                            Err(e) => println!("Import failed: {}", e),
                         }
                     }
                     Err(e) => println!("Failed to read file: {}", e),
                 },
                 GraphAction::Diff { path } => match std::fs::read_to_string(&path) {
                     Ok(content) => {
-                        match rustagent::graph::interchange::diff_goal(&graph_store, &content)
-                            .await
+                        match rustagent::graph::interchange::diff_goal(&graph_store, &content).await
                         {
                             Ok(result) => {
                                 println!("Diff results for {}:", path);
