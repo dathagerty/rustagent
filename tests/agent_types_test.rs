@@ -3,9 +3,11 @@ use rustagent::agent::profile::AgentProfile;
 use rustagent::agent::{Agent, AgentContext, AgentId, AgentOutcome};
 use rustagent::graph::{EdgeType, GraphNode, NodeStatus};
 use rustagent::security::SecurityScope;
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+
+mod common;
+use common::MockGraphStore;
 
 /// Mock agent for testing trait implementation
 struct MockAgent {
@@ -186,101 +188,5 @@ async fn test_mock_agent_run() {
             assert_eq!(summary, "mock completed");
         }
         _ => panic!("Expected Completed outcome"),
-    }
-}
-
-// Mock GraphStore for testing
-struct MockGraphStore;
-
-#[async_trait]
-impl rustagent::graph::store::GraphStore for MockGraphStore {
-    async fn create_node(&self, _node: &GraphNode) -> anyhow::Result<()> {
-        Ok(())
-    }
-
-    async fn update_node(
-        &self,
-        _id: &str,
-        _status: Option<NodeStatus>,
-        _title: Option<&str>,
-        _description: Option<&str>,
-        _metadata: Option<&HashMap<String, String>>,
-    ) -> anyhow::Result<()> {
-        Ok(())
-    }
-
-    async fn get_node(&self, _id: &str) -> anyhow::Result<Option<GraphNode>> {
-        Ok(None)
-    }
-
-    async fn query_nodes(
-        &self,
-        _query: &rustagent::graph::store::NodeQuery,
-    ) -> anyhow::Result<Vec<GraphNode>> {
-        Ok(vec![])
-    }
-
-    async fn claim_task(&self, _node_id: &str, _agent_id: &str) -> anyhow::Result<bool> {
-        Ok(false)
-    }
-
-    async fn get_ready_tasks(&self, _goal_id: &str) -> anyhow::Result<Vec<GraphNode>> {
-        Ok(vec![])
-    }
-
-    async fn get_next_task(&self, _goal_id: &str) -> anyhow::Result<Option<GraphNode>> {
-        Ok(None)
-    }
-
-    async fn add_edge(&self, _edge: &rustagent::graph::GraphEdge) -> anyhow::Result<()> {
-        Ok(())
-    }
-
-    async fn remove_edge(&self, _edge_id: &str) -> anyhow::Result<()> {
-        Ok(())
-    }
-
-    async fn get_edges(
-        &self,
-        _node_id: &str,
-        _direction: rustagent::graph::store::EdgeDirection,
-    ) -> anyhow::Result<Vec<(rustagent::graph::GraphEdge, GraphNode)>> {
-        Ok(vec![])
-    }
-
-    async fn get_children(&self, _node_id: &str) -> anyhow::Result<Vec<(GraphNode, EdgeType)>> {
-        Ok(vec![])
-    }
-
-    async fn get_subtree(&self, _node_id: &str) -> anyhow::Result<Vec<GraphNode>> {
-        Ok(vec![])
-    }
-
-    async fn get_active_decisions(&self, _project_id: &str) -> anyhow::Result<Vec<GraphNode>> {
-        Ok(vec![])
-    }
-
-    async fn get_full_graph(
-        &self,
-        _goal_id: &str,
-    ) -> anyhow::Result<rustagent::graph::store::WorkGraph> {
-        Ok(rustagent::graph::store::WorkGraph {
-            nodes: vec![],
-            edges: vec![],
-        })
-    }
-
-    async fn search_nodes(
-        &self,
-        _query: &str,
-        _project_id: Option<&str>,
-        _node_type: Option<rustagent::graph::NodeType>,
-        _limit: usize,
-    ) -> anyhow::Result<Vec<GraphNode>> {
-        Ok(vec![])
-    }
-
-    async fn next_child_seq(&self, _parent_id: &str) -> anyhow::Result<u32> {
-        Ok(1)
     }
 }

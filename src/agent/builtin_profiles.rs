@@ -9,8 +9,6 @@ pub fn planner() -> AgentProfile {
         role: "Task breakdown specialist".to_string(),
         system_prompt: "You are a task breakdown specialist. Your role is to analyze high-level goals and break them into concrete, actionable tasks. Each task should have clear acceptance criteria and be assigned to the most appropriate agent type (coder, reviewer, tester, or researcher). Prioritize tasks based on dependencies and criticality.".to_string(),
         allowed_tools: vec![
-            "file".to_string(),
-            "shell".to_string(),
             "graph".to_string(),
             "signal_completion".to_string(),
         ],
@@ -121,6 +119,7 @@ pub fn researcher() -> AgentProfile {
             "shell".to_string(),
             "graph".to_string(),
             "signal_completion".to_string(),
+            // NOTE: search tool deferred to Phase 5
         ],
         security: SecurityScope {
             allowed_paths: vec!["*".to_string()],

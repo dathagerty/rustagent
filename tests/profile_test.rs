@@ -375,7 +375,8 @@ fn test_resolve_builtin_tester_profile() {
 #[test]
 fn test_resolve_builtin_researcher_profile() {
     // P1d.AC3.2: resolve_profile("researcher", None) returns built-in researcher profile
-    let profile = resolve_profile("researcher", None).expect("Failed to resolve researcher profile");
+    let profile =
+        resolve_profile("researcher", None).expect("Failed to resolve researcher profile");
 
     assert_eq!(profile.name, "researcher");
     assert_eq!(profile.role, "Information gathering specialist");
@@ -462,8 +463,8 @@ network_access = false
     let profile_path = profiles_dir.join("coder.toml");
     fs::write(&profile_path, project_coder).expect("Failed to write coder.toml");
 
-    let profile = resolve_profile("coder", Some(project_path))
-        .expect("Failed to resolve coder profile");
+    let profile =
+        resolve_profile("coder", Some(project_path)).expect("Failed to resolve coder profile");
 
     assert_eq!(profile.role, "Project-specific coder");
 }
@@ -500,8 +501,8 @@ network_access = false
     let profile_path = profiles_dir.join("custom.toml");
     fs::write(&profile_path, custom_toml).expect("Failed to write custom.toml");
 
-    let profile = resolve_profile("custom", Some(project_path))
-        .expect("Failed to resolve custom profile");
+    let profile =
+        resolve_profile("custom", Some(project_path)).expect("Failed to resolve custom profile");
 
     // Should inherit role from coder (since custom is empty)
     assert_eq!(profile.role, "Implementation specialist");
@@ -509,7 +510,11 @@ network_access = false
     assert!(profile.allowed_tools.contains(&"file".to_string()));
     assert!(profile.allowed_tools.contains(&"shell".to_string()));
     // Should have combined system_prompt
-    assert!(profile.system_prompt.contains("Custom project instructions"));
+    assert!(
+        profile
+            .system_prompt
+            .contains("Custom project instructions")
+    );
 }
 
 #[test]

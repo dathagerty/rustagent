@@ -8,7 +8,10 @@ use std::path::{Path, PathBuf};
 /// collecting all AGENTS.md files encountered. Returns tuples of (path, heading_summary) where
 /// heading_summary is a comma-separated list of top-level headings. Results are deduplicated
 /// and ordered with closest-to-file first.
-pub fn resolve_agents_md(project_root: &Path, file_scope: &[PathBuf]) -> Result<Vec<(String, String)>> {
+pub fn resolve_agents_md(
+    project_root: &Path,
+    file_scope: &[PathBuf],
+) -> Result<Vec<(String, String)>> {
     let mut summaries: Vec<(String, String)> = Vec::new();
     let mut seen_paths: HashSet<PathBuf> = HashSet::new();
 
@@ -21,26 +24,20 @@ pub fn resolve_agents_md(project_root: &Path, file_scope: &[PathBuf]) -> Result<
             project_root.join(file_path)
         };
 
-        // Walk from project root to the file's parent, collecting AGENTS.md files
-        let mut current = project_root.to_path_buf();
+        // Walk from the file's parent directory up to project root, collecting directories
+        let file_parent = absolute_path.parent().unwrap_or(project_root);
+        let mut current = file_parent.to_path_buf();
+        let mut dirs_to_check = Vec::new();
 
-        // Collect all directories from root to file's parent
-        let mut dirs_to_check = vec![current.clone()];
-
-        loop {
-            if let Some(parent) = absolute_path.parent() {
-                if parent != current && current.starts_with(project_root) {
-                    current = parent.to_path_buf();
-                    dirs_to_check.push(current.clone());
-                } else {
-                    break;
-                }
-            } else {
-                break;
-            }
-
+        // Collect all directories from file parent up to project root
+        while current.starts_with(project_root) {
+            dirs_to_check.push(current.clone());
             if current == project_root {
                 break;
+            }
+            match current.parent() {
+                Some(p) => current = p.to_path_buf(),
+                None => break,
             }
         }
 
@@ -90,7 +87,10 @@ mod tests {
         )?;
 
         let headings = extract_headings(&agents_md_path)?;
-        assert_eq!(headings, vec!["Introduction", "Getting Started", "Advanced"]);
+        assert_eq!(
+            headings,
+            vec!["Introduction", "Getting Started", "Advanced"]
+        );
         Ok(())
     }
 
@@ -100,10 +100,7 @@ mod tests {
         let project_root = tmpdir.path();
 
         // Create AGENTS.md at root
-        fs::write(
-            project_root.join("AGENTS.md"),
-            "# Root\n# Guidelines",
-        )?;
+        fs::write(project_root.join("AGENTS.md"), "# Root\n# Guidelines")?;
 
         // Create a file to scope
         fs::write(project_root.join("main.rs"), "fn main() {}")?;
@@ -124,10 +121,7 @@ mod tests {
 
         // Create src directory with AGENTS.md
         fs::create_dir(project_root.join("src"))?;
-        fs::write(
-            project_root.join("src/AGENTS.md"),
-            "# Rust Guidelines",
-        )?;
+        fs::write(project_root.join("src/AGENTS.md"), "# Rust Guidelines")?;
 
         // Create a file in src
         fs::write(project_root.join("src/main.rs"), "fn main() {}")?;
@@ -160,6 +154,38 @@ mod tests {
 
         // Should have AGENTS.md only once despite two files in scope
         assert_eq!(summaries.len(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn test_resolve_agents_md_nested_three_levels() -> Result<()> {
+        let tmpdir = TempDir::new()?;
+        let project_root = tmpdir.path();
+
+        // Create AGENTS.md at root
+        fs::write(project_root.join("AGENTS.md"), "# Root Guidelines")?;
+
+        // Create src directory with AGENTS.md
+        fs::create_dir(project_root.join("src"))?;
+        fs::write(project_root.join("src/AGENTS.md"), "# Rust Guidelines")?;
+
+        // Create src/auth directory with AGENTS.md
+        fs::create_dir(project_root.join("src/auth"))?;
+        fs::write(
+            project_root.join("src/auth/AGENTS.md"),
+            "# Auth Module Guidelines",
+        )?;
+
+        // Create a file deep in the hierarchy
+        fs::write(project_root.join("src/auth/handler.rs"), "fn handle() {}")?;
+
+        let summaries = resolve_agents_md(project_root, &[PathBuf::from("src/auth/handler.rs")])?;
+
+        // Should have all three AGENTS.md files, in order: closest to file first
+        assert_eq!(summaries.len(), 3);
+        assert!(summaries[0].0.contains("src/auth/AGENTS.md"));
+        assert!(summaries[1].0.contains("src/AGENTS.md"));
+        assert!(summaries[2].0.contains("AGENTS.md"));
         Ok(())
     }
 }

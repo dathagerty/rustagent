@@ -1,5 +1,5 @@
 use crate::security::SecurityScope;
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::Path;
@@ -134,13 +134,18 @@ fn resolve_profile_impl(
 ) -> Result<AgentProfile> {
     // Check for cycles in inheritance
     if visited.contains(name) {
-        bail!("inheritance cycle detected: profile '{}' extends itself", name);
+        bail!(
+            "inheritance cycle detected: profile '{}' extends itself",
+            name
+        );
     }
     visited.insert(name.to_string());
 
     // 1. Project-level: .rustagent/profiles/{name}.toml
     if let Some(path) = project_path {
-        let profile_path = path.join(".rustagent/profiles").join(format!("{}.toml", name));
+        let profile_path = path
+            .join(".rustagent/profiles")
+            .join(format!("{}.toml", name));
         if profile_path.exists() {
             let content = std::fs::read_to_string(&profile_path)?;
             let mut profile: AgentProfile = toml::from_str(&content)?;

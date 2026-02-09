@@ -20,7 +20,8 @@ impl ContextBuilder {
         // Role section
         prompt.push_str("## Role\n");
         prompt.push_str(&ctx.profile.role);
-        prompt.push_str("\n\n");
+        prompt.push('\n');
+        prompt.push('\n');
 
         // Task section - show work package tasks
         if !ctx.work_package_tasks.is_empty() {
@@ -40,13 +41,14 @@ impl ContextBuilder {
                     prompt.push_str(&format!("[CRITERIA] {}\n", criteria));
                 }
             }
-            prompt.push_str("\n");
+            prompt.push('\n');
         }
 
         // Session continuity - handoff notes
         if let Some(handoff) = &ctx.handoff_notes {
             prompt.push_str("## Session Continuity\n");
-            prompt.push_str(&format!("[HANDOFF] {}\n\n", handoff));
+            prompt.push_str(&format!("[HANDOFF] {}\n", handoff));
+            prompt.push('\n');
         }
 
         // Active decisions section
@@ -63,7 +65,7 @@ impl ContextBuilder {
                     prompt.push_str(&format!("  chosen: {}\n", chosen));
                 }
             }
-            prompt.push_str("\n");
+            prompt.push('\n');
         }
 
         // Relevant observations
@@ -72,7 +74,7 @@ impl ContextBuilder {
             for task in &ctx.work_package_tasks {
                 prompt.push_str(&format!("- {}: {}\n", task.id, task.description));
             }
-            prompt.push_str("\n");
+            prompt.push('\n');
         }
 
         // Project conventions
@@ -81,13 +83,13 @@ impl ContextBuilder {
             for (path, heading_summary) in &ctx.agents_md_summaries {
                 prompt.push_str(&format!("- {}: {}\n", path, heading_summary));
             }
-            prompt.push_str("\n");
+            prompt.push('\n');
         }
 
         // Rules from the profile
         prompt.push_str("## Rules\n");
         prompt.push_str(&ctx.profile.system_prompt);
-        prompt.push_str("\n");
+        prompt.push('\n');
 
         prompt
     }
@@ -132,6 +134,14 @@ impl Tool for ReadAgentsMdTool {
             .ok_or_else(|| anyhow::anyhow!("missing 'path' parameter"))?;
 
         let path_buf = PathBuf::from(path);
+
+        // Validate that the file is named AGENTS.md
+        if path_buf.file_name() != Some(std::ffi::OsStr::new("AGENTS.md")) {
+            return Err(anyhow::anyhow!(
+                "read_agents_md can only read AGENTS.md files"
+            ));
+        }
+
         let content = std::fs::read_to_string(&path_buf)
             .map_err(|e| anyhow::anyhow!("failed to read {}: {}", path, e))?;
 
@@ -207,5 +217,33 @@ mod tests {
         let tool = ReadAgentsMdTool::new();
         let result = tool.execute(json!({})).await;
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_read_agents_md_tool_invalid_filename() {
+        let tool = ReadAgentsMdTool::new();
+        let result = tool
+            .execute(json!({
+                "path": "/some/path/README.md"
+            }))
+            .await;
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("AGENTS.md"));
+    }
+
+    #[tokio::test]
+    async fn test_read_agents_md_tool_restricts_to_agents_md() {
+        let tool = ReadAgentsMdTool::new();
+
+        // Try to read a different file
+        let result = tool
+            .execute(json!({
+                "path": "/etc/passwd"
+            }))
+            .await;
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("AGENTS.md"));
     }
 }

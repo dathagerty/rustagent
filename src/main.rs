@@ -304,13 +304,14 @@ async fn main() -> anyhow::Result<()> {
 
             // Resolve project
             let project_opt = resolve_project(&database, cli.project.as_deref()).await?;
-            let project = project_opt
-                .ok_or_else(|| anyhow::anyhow!("No project specified or found in current directory"))?;
+            let project = project_opt.ok_or_else(|| {
+                anyhow::anyhow!("No project specified or found in current directory")
+            })?;
 
             // Create goal node in graph
-            let graph_store = std::sync::Arc::new(
-                rustagent::graph::store::SqliteGraphStore::new(database.clone())
-            );
+            let graph_store = std::sync::Arc::new(rustagent::graph::store::SqliteGraphStore::new(
+                database.clone(),
+            ));
 
             let goal_id = rustagent::graph::generate_goal_id();
             let goal_node = rustagent::graph::GraphNode {
@@ -336,22 +337,16 @@ async fn main() -> anyhow::Result<()> {
 
             // Create session
             let session_store = rustagent::graph::session::SessionStore::new(database.clone());
-            let session = session_store
-                .create_session(&goal_id, &profile)
-                .await?;
+            let session = session_store.create_session(&goal_id, &profile).await?;
             println!("Started session: {}", session.id);
 
             // Resolve profile
-            let resolved_profile = rustagent::agent::profile::resolve_profile(
-                &profile,
-                Some(&project.path),
-            )?;
+            let resolved_profile =
+                rustagent::agent::profile::resolve_profile(&profile, Some(&project.path))?;
 
             // Build AgentContext
-            let agents_md_summaries = rustagent::context::resolve_agents_md(
-                &project.path,
-                &[],
-            ).unwrap_or_default();
+            let agents_md_summaries =
+                rustagent::context::resolve_agents_md(&project.path, &[]).unwrap_or_default();
 
             let ctx = rustagent::agent::AgentContext {
                 work_package_tasks: vec![goal_node],
@@ -368,11 +363,10 @@ async fn main() -> anyhow::Result<()> {
 
             // Create tool registry
             let security_validator = std::sync::Arc::new(
-                rustagent::security::SecurityValidator::new(config.security.clone())?
+                rustagent::security::SecurityValidator::new(config.security.clone())?,
             );
-            let permission_handler = std::sync::Arc::new(
-                rustagent::security::permission::CliPermissionHandler {}
-            );
+            let permission_handler =
+                std::sync::Arc::new(rustagent::security::permission::CliPermissionHandler {});
 
             let tool_registry = rustagent::tools::factory::create_v2_registry(
                 security_validator,
@@ -404,43 +398,57 @@ async fn main() -> anyhow::Result<()> {
             match outcome {
                 rustagent::agent::AgentOutcome::Completed { summary } => {
                     println!("Agent completed: {}", summary);
-                    graph_store.update_node(
-                        &goal_id,
-                        Some(rustagent::graph::NodeStatus::Completed),
-                        None,
-                        None,
-                        None,
-                    ).await?;
+                    graph_store
+                        .update_node(
+                            &goal_id,
+                            Some(rustagent::graph::NodeStatus::Completed),
+                            None,
+                            None,
+                            None,
+                        )
+                        .await?;
                 }
                 rustagent::agent::AgentOutcome::Blocked { reason } => {
                     println!("Agent blocked: {}", reason);
-                    graph_store.update_node(
-                        &goal_id,
-                        Some(rustagent::graph::NodeStatus::Blocked),
-                        None,
-                        Some(&reason),
-                        None,
-                    ).await?;
+                    graph_store
+                        .update_node(
+                            &goal_id,
+                            Some(rustagent::graph::NodeStatus::Blocked),
+                            None,
+                            Some(&reason),
+                            None,
+                        )
+                        .await?;
                 }
                 rustagent::agent::AgentOutcome::Failed { error } => {
                     println!("Agent failed: {}", error);
-                    graph_store.update_node(
-                        &goal_id,
-                        Some(rustagent::graph::NodeStatus::Failed),
-                        None,
-                        Some(&error),
-                        None,
-                    ).await?;
+                    graph_store
+                        .update_node(
+                            &goal_id,
+                            Some(rustagent::graph::NodeStatus::Failed),
+                            None,
+                            Some(&error),
+                            None,
+                        )
+                        .await?;
                 }
-                rustagent::agent::AgentOutcome::TokenBudgetExhausted { summary, tokens_used } => {
+                rustagent::agent::AgentOutcome::TokenBudgetExhausted {
+                    summary,
+                    tokens_used,
+                } => {
                     println!("Token budget exhausted ({}): {}", tokens_used, summary);
-                    graph_store.update_node(
-                        &goal_id,
-                        Some(rustagent::graph::NodeStatus::Completed),
-                        None,
-                        Some(&format!("Token budget exhausted after {} tokens", tokens_used)),
-                        None,
-                    ).await?;
+                    graph_store
+                        .update_node(
+                            &goal_id,
+                            Some(rustagent::graph::NodeStatus::Completed),
+                            None,
+                            Some(&format!(
+                                "Token budget exhausted after {} tokens",
+                                tokens_used
+                            )),
+                            None,
+                        )
+                        .await?;
                 }
             }
 

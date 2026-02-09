@@ -1,4 +1,5 @@
 use crate::agent::{AgentContext, AgentOutcome, AgentProfile};
+use crate::context::ContextBuilder;
 use crate::llm::{LlmClient, Message, ResponseContent};
 use crate::tools::ToolRegistry;
 use anyhow::Result;
@@ -56,8 +57,9 @@ impl AgentRuntime {
     }
 
     /// Run the agentic loop
-    pub async fn run(&self, _ctx: AgentContext) -> Result<AgentOutcome> {
-        let mut messages = vec![Message::system(self.profile.system_prompt.clone())];
+    pub async fn run(&self, ctx: AgentContext) -> Result<AgentOutcome> {
+        let system_prompt = ContextBuilder::build_system_prompt(&ctx);
+        let mut messages = vec![Message::system(system_prompt)];
         let mut cumulative_tokens: usize = 0;
         let mut warned_about_budget = false;
         let mut consecutive_llm_failures = 0;
@@ -68,16 +70,14 @@ impl AgentRuntime {
             // Check turn limit
             if turn >= self.config.max_turns {
                 return Ok(AgentOutcome::Completed {
-                    summary: format!(
-                        "Turn limit reached after {} turns",
-                        self.config.max_turns
-                    ),
+                    summary: format!("Turn limit reached after {} turns", self.config.max_turns),
                 });
             }
             turn += 1;
 
             // Check token budget warning threshold
-            let token_warning_threshold = (self.config.token_budget * self.config.token_budget_warning_pct as usize) / 100;
+            let token_warning_threshold =
+                (self.config.token_budget * self.config.token_budget_warning_pct as usize) / 100;
             if cumulative_tokens >= token_warning_threshold && !warned_about_budget {
                 warned_about_budget = true;
                 messages.push(Message::system(
@@ -147,7 +147,9 @@ impl AgentRuntime {
                                                 .strip_prefix("SIGNAL:complete:")
                                                 .unwrap_or("Task completed")
                                                 .to_string();
-                                            return Ok(AgentOutcome::Completed { summary: message });
+                                            return Ok(AgentOutcome::Completed {
+                                                summary: message,
+                                            });
                                         } else if output.contains("SIGNAL:blocked") {
                                             let reason = output
                                                 .strip_prefix("SIGNAL:blocked:")
@@ -158,10 +160,7 @@ impl AgentRuntime {
                                     }
                                     Err(e) => {
                                         consecutive_tool_failures += 1;
-                                        let error_msg = format!(
-                                            "Tool execution failed: {}",
-                                            e
-                                        );
+                                        let error_msg = format!("Tool execution failed: {}", e);
                                         messages.push(Message::tool_result(
                                             tool_call.id.clone(),
                                             error_msg,
@@ -174,30 +173,32 @@ impl AgentRuntime {
 
                         // Execute regular tool
                         match self.tools.get(&tool_call.name) {
-                            Some(tool) => {
-                                match tool.execute(tool_call.parameters).await {
-                                    Ok(output) => {
-                                        consecutive_tool_failures = 0;
-                                        messages.push(Message::tool_result(tool_call.id, output));
-                                    }
-                                    Err(e) => {
-                                        consecutive_tool_failures += 1;
-                                        if consecutive_tool_failures >= self.config.max_consecutive_tool_failures {
-                                            return Ok(AgentOutcome::Blocked {
-                                                reason: format!(
-                                                    "Tool failures: {} consecutive failures",
-                                                    self.config.max_consecutive_tool_failures
-                                                ),
-                                            });
-                                        }
-                                        let error_msg = format!("Tool error: {}", e);
-                                        messages.push(Message::tool_result(tool_call.id, error_msg));
-                                    }
+                            Some(tool) => match tool.execute(tool_call.parameters).await {
+                                Ok(output) => {
+                                    consecutive_tool_failures = 0;
+                                    messages.push(Message::tool_result(tool_call.id, output));
                                 }
-                            }
+                                Err(e) => {
+                                    consecutive_tool_failures += 1;
+                                    if consecutive_tool_failures
+                                        >= self.config.max_consecutive_tool_failures
+                                    {
+                                        return Ok(AgentOutcome::Blocked {
+                                            reason: format!(
+                                                "Tool failures: {} consecutive failures",
+                                                self.config.max_consecutive_tool_failures
+                                            ),
+                                        });
+                                    }
+                                    let error_msg = format!("Tool error: {}", e);
+                                    messages.push(Message::tool_result(tool_call.id, error_msg));
+                                }
+                            },
                             None => {
                                 consecutive_tool_failures += 1;
-                                if consecutive_tool_failures >= self.config.max_consecutive_tool_failures {
+                                if consecutive_tool_failures
+                                    >= self.config.max_consecutive_tool_failures
+                                {
                                     return Ok(AgentOutcome::Blocked {
                                         reason: format!(
                                             "Tool failures: {} consecutive failures",
