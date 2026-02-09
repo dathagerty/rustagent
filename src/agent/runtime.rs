@@ -36,6 +36,7 @@ impl Default for RuntimeConfig {
 pub struct AgentRuntime {
     client: Arc<dyn LlmClient>,
     tools: ToolRegistry,
+    #[allow(dead_code)] // Stored for multi-agent orchestration in later phases
     profile: AgentProfile,
     config: RuntimeConfig,
 }

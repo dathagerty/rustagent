@@ -1,10 +1,5 @@
-use async_trait::async_trait;
 use rustagent::agent::runtime::{AgentRuntime, RuntimeConfig};
 use rustagent::agent::{AgentContext, AgentOutcome, AgentProfile};
-use rustagent::graph::GraphNode;
-use rustagent::graph::NodeType;
-use rustagent::graph::store::WorkGraph;
-use rustagent::graph::store::{GraphStore, NodeQuery};
 use rustagent::llm::mock::MockLlmClient;
 use rustagent::security::SecurityScope;
 use rustagent::tools::ToolRegistry;
@@ -133,12 +128,12 @@ async fn test_p1d_ac4_3_token_budget_warning() {
     // P1d.AC4.3: At warning threshold (80%), inject "wrap up" message
     let mock_client = Arc::new(MockLlmClient::new());
 
-    // First call: return tokens that reach 80% of budget (800 of 1000)
-    mock_client.set_token_counts(400, 400); // Total 800 of budget 1000 (80%)
+    // set_token_counts is global (applies to all responses), not per-response
+    // First call returns 800 tokens total (400+400), reaching 80% of 1000 budget
+    mock_client.set_token_counts(400, 400);
     mock_client.queue_text_response("Processing...");
 
-    // Second call: should have wrap-up message injected, respond with signal_completion
-    mock_client.set_token_counts(0, 0);
+    // Second call: wrap-up message should be injected before this call
     mock_client.queue_tool_call(
         "signal_completion",
         json!({
@@ -174,23 +169,23 @@ async fn test_p1d_ac4_3_token_budget_warning() {
     let ctx = make_test_context();
     let outcome = runtime.run(ctx).await.expect("Runtime failed");
 
-    // Verify that the wrap-up logic was engaged
+    // Verify that the wrap-up logic was engaged by checking recorded LLM calls
     let calls = mock_client.get_recorded_calls();
-    assert!(!calls.is_empty(), "Expected at least 1 LLM call");
+    assert!(calls.len() >= 2, "Expected at least 2 LLM calls");
 
-    // Check that we reached the 80% warning threshold (800 tokens of 1000 budget)
+    // The second call's messages should contain the wrap-up warning injected by the runtime
+    let second_call_messages = &calls[1].0;
+    let has_wrap_up_message = second_call_messages
+        .iter()
+        .any(|msg| msg.role == rustagent::llm::Role::System && msg.content.contains("Wrap up"));
+    assert!(
+        has_wrap_up_message,
+        "Expected wrap-up system message in second LLM call messages"
+    );
+
+    // Verify outcome is valid completion or token exhaustion
     match outcome {
-        AgentOutcome::Completed { .. } => {
-            // Completion is valid - wrap-up logic allowed the agent to gracefully finish
-            assert!(true, "Wrap-up logic allowed graceful completion");
-        }
-        AgentOutcome::TokenBudgetExhausted { tokens_used, .. } => {
-            // Also valid - token budget was exhausted after reaching warning threshold
-            assert!(
-                tokens_used >= 800,
-                "Expected to reach at least 80% threshold"
-            );
-        }
+        AgentOutcome::Completed { .. } | AgentOutcome::TokenBudgetExhausted { .. } => {}
         _ => panic!("Unexpected outcome: {:?}", outcome),
     }
 }

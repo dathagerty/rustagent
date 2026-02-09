@@ -1,7 +1,6 @@
 use async_trait::async_trait;
 use rustagent::agent::profile::AgentProfile;
 use rustagent::agent::{Agent, AgentContext, AgentId, AgentOutcome};
-use rustagent::graph::{EdgeType, GraphNode, NodeStatus};
 use rustagent::security::SecurityScope;
 use std::path::PathBuf;
 use std::sync::Arc;

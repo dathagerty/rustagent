@@ -41,8 +41,8 @@ pub fn resolve_agents_md(
             }
         }
 
-        // Check each directory for AGENTS.md (reverse order: closest to file first)
-        for dir in dirs_to_check.iter().rev() {
+        // Check each directory for AGENTS.md (closest to file first)
+        for dir in &dirs_to_check {
             let agents_md_path = dir.join("AGENTS.md");
             if agents_md_path.exists() && !seen_paths.contains(&agents_md_path) {
                 seen_paths.insert(agents_md_path.clone());
