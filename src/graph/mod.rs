@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 pub mod dependency;
+pub mod export;
 pub mod session;
 pub mod store;
 
