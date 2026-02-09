@@ -1,5 +1,7 @@
-use rustagent::agent::profile::AgentProfile;
+use rustagent::agent::profile::{AgentProfile, resolve_profile};
 use rustagent::security::SecurityScope;
+use std::fs;
+use tempfile::TempDir;
 
 #[test]
 fn test_security_scope_default_is_permissive() {
@@ -324,4 +326,240 @@ fn test_agent_profile_inheritance_llm_config() {
     assert_eq!(child.llm.model, Some("child-model".to_string())); // child wins
     assert_eq!(child.llm.temperature, Some(0.5)); // from parent
     assert_eq!(child.llm.max_tokens, Some(2000)); // from parent
+}
+
+// Built-in profiles tests
+
+#[test]
+fn test_resolve_builtin_coder_profile() {
+    // P1d.AC3.2: resolve_profile("coder", None) returns built-in coder profile
+    let profile = resolve_profile("coder", None).expect("Failed to resolve coder profile");
+
+    assert_eq!(profile.name, "coder");
+    assert_eq!(profile.role, "Implementation specialist");
+    assert!(profile.system_prompt.len() > 0);
+    assert!(profile.allowed_tools.contains(&"file".to_string()));
+    assert!(profile.allowed_tools.contains(&"shell".to_string()));
+}
+
+#[test]
+fn test_resolve_builtin_planner_profile() {
+    // P1d.AC3.2: resolve_profile("planner", None) returns built-in planner profile
+    let profile = resolve_profile("planner", None).expect("Failed to resolve planner profile");
+
+    assert_eq!(profile.name, "planner");
+    assert_eq!(profile.role, "Task breakdown specialist");
+    assert!(profile.system_prompt.len() > 0);
+}
+
+#[test]
+fn test_resolve_builtin_reviewer_profile() {
+    // P1d.AC3.2: resolve_profile("reviewer", None) returns built-in reviewer profile
+    let profile = resolve_profile("reviewer", None).expect("Failed to resolve reviewer profile");
+
+    assert_eq!(profile.name, "reviewer");
+    assert_eq!(profile.role, "Code review specialist");
+    assert!(profile.system_prompt.len() > 0);
+}
+
+#[test]
+fn test_resolve_builtin_tester_profile() {
+    // P1d.AC3.2: resolve_profile("tester", None) returns built-in tester profile
+    let profile = resolve_profile("tester", None).expect("Failed to resolve tester profile");
+
+    assert_eq!(profile.name, "tester");
+    assert_eq!(profile.role, "Test implementation specialist");
+    assert!(profile.system_prompt.len() > 0);
+}
+
+#[test]
+fn test_resolve_builtin_researcher_profile() {
+    // P1d.AC3.2: resolve_profile("researcher", None) returns built-in researcher profile
+    let profile = resolve_profile("researcher", None).expect("Failed to resolve researcher profile");
+
+    assert_eq!(profile.name, "researcher");
+    assert_eq!(profile.role, "Information gathering specialist");
+    assert!(profile.system_prompt.len() > 0);
+}
+
+#[test]
+fn test_resolve_unknown_profile_fails() {
+    // Unknown profile should fail
+    let result = resolve_profile("nonexistent_profile", None);
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("Unknown profile"));
+}
+
+#[test]
+fn test_resolve_project_level_profile() {
+    // P1d.AC3.3: Create a tempdir with .rustagent/profiles/custom.toml
+    let tempdir = TempDir::new().expect("Failed to create tempdir");
+    let project_path = tempdir.path();
+
+    // Create .rustagent/profiles directory
+    let profiles_dir = project_path.join(".rustagent").join("profiles");
+    fs::create_dir_all(&profiles_dir).expect("Failed to create profiles directory");
+
+    // Create custom.toml
+    let custom_toml = r#"
+name = "custom"
+role = "Custom role"
+system_prompt = "Custom system prompt"
+allowed_tools = ["file", "shell"]
+turn_limit = 50
+token_budget = 100000
+
+[security]
+allowed_paths = ["/project"]
+denied_paths = []
+allowed_commands = ["ls", "cat"]
+read_only = false
+can_create_files = true
+network_access = false
+
+[llm]
+model = "claude-3-sonnet-20250219"
+temperature = 0.7
+max_tokens = 4096
+"#;
+
+    let profile_path = profiles_dir.join("custom.toml");
+    fs::write(&profile_path, custom_toml).expect("Failed to write custom.toml");
+
+    let profile =
+        resolve_profile("custom", Some(project_path)).expect("Failed to resolve custom profile");
+
+    assert_eq!(profile.name, "custom");
+    assert_eq!(profile.role, "Custom role");
+}
+
+#[test]
+fn test_resolve_project_level_overrides_builtin() {
+    // P1d.AC3.4: Project-level "coder" profile should override built-in
+    let tempdir = TempDir::new().expect("Failed to create tempdir");
+    let project_path = tempdir.path();
+
+    // Create .rustagent/profiles directory
+    let profiles_dir = project_path.join(".rustagent").join("profiles");
+    fs::create_dir_all(&profiles_dir).expect("Failed to create profiles directory");
+
+    // Create project-level coder.toml
+    let project_coder = r#"
+name = "coder"
+role = "Project-specific coder"
+system_prompt = "Project-specific system prompt"
+allowed_tools = ["file", "shell"]
+
+[security]
+allowed_paths = ["/project"]
+denied_paths = []
+allowed_commands = ["*"]
+read_only = false
+can_create_files = true
+network_access = false
+"#;
+
+    let profile_path = profiles_dir.join("coder.toml");
+    fs::write(&profile_path, project_coder).expect("Failed to write coder.toml");
+
+    let profile = resolve_profile("coder", Some(project_path))
+        .expect("Failed to resolve coder profile");
+
+    assert_eq!(profile.role, "Project-specific coder");
+}
+
+#[test]
+fn test_resolve_profile_with_inheritance() {
+    // P1d.AC3.5: Custom profile extends built-in, inheritance applied
+    let tempdir = TempDir::new().expect("Failed to create tempdir");
+    let project_path = tempdir.path();
+
+    // Create .rustagent/profiles directory
+    let profiles_dir = project_path.join(".rustagent").join("profiles");
+    fs::create_dir_all(&profiles_dir).expect("Failed to create profiles directory");
+
+    // Create custom.toml that extends built-in "coder"
+    let custom_toml = r#"
+name = "custom"
+extends = "coder"
+role = ""
+system_prompt = "Custom project instructions"
+allowed_tools = []
+
+[security]
+allowed_paths = ["*"]
+denied_paths = []
+allowed_commands = ["*"]
+read_only = false
+can_create_files = true
+network_access = false
+
+[llm]
+"#;
+
+    let profile_path = profiles_dir.join("custom.toml");
+    fs::write(&profile_path, custom_toml).expect("Failed to write custom.toml");
+
+    let profile = resolve_profile("custom", Some(project_path))
+        .expect("Failed to resolve custom profile");
+
+    // Should inherit role from coder (since custom is empty)
+    assert_eq!(profile.role, "Implementation specialist");
+    // Should have coder's tools (since custom is empty)
+    assert!(profile.allowed_tools.contains(&"file".to_string()));
+    assert!(profile.allowed_tools.contains(&"shell".to_string()));
+    // Should have combined system_prompt
+    assert!(profile.system_prompt.contains("Custom project instructions"));
+}
+
+#[test]
+fn test_resolve_profile_cycle_detection() {
+    // P1d.AC3.5: Cycle detection in inheritance chain
+    let tempdir = TempDir::new().expect("Failed to create tempdir");
+    let project_path = tempdir.path();
+
+    // Create .rustagent/profiles directory
+    let profiles_dir = project_path.join(".rustagent").join("profiles");
+    fs::create_dir_all(&profiles_dir).expect("Failed to create profiles directory");
+
+    // Create a.toml that extends b
+    let a_toml = r#"
+name = "a"
+extends = "b"
+role = "A"
+system_prompt = ""
+allowed_tools = []
+
+[security]
+allowed_paths = ["*"]
+denied_paths = []
+allowed_commands = ["*"]
+read_only = false
+can_create_files = true
+network_access = false
+"#;
+
+    // Create b.toml that extends a (cycle!)
+    let b_toml = r#"
+name = "b"
+extends = "a"
+role = "B"
+system_prompt = ""
+allowed_tools = []
+
+[security]
+allowed_paths = ["*"]
+denied_paths = []
+allowed_commands = ["*"]
+read_only = false
+can_create_files = true
+network_access = false
+"#;
+
+    fs::write(profiles_dir.join("a.toml"), a_toml).expect("Failed to write a.toml");
+    fs::write(profiles_dir.join("b.toml"), b_toml).expect("Failed to write b.toml");
+
+    let result = resolve_profile("a", Some(project_path));
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("cycle"));
 }

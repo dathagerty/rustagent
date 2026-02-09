@@ -1,5 +1,8 @@
 use crate::security::SecurityScope;
+use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
+use std::path::Path;
 
 /// LLM configuration for an agent profile
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -113,5 +116,65 @@ impl AgentProfile {
         if self.token_budget.is_none() {
             self.token_budget = parent.token_budget;
         }
+    }
+}
+
+/// Resolve a profile by name, checking in order: project-level, user-level, built-in.
+///
+/// Supports inheritance via `extends` field. Returns error on cycles or unknown profiles.
+pub fn resolve_profile(name: &str, project_path: Option<&Path>) -> Result<AgentProfile> {
+    let mut visited = HashSet::new();
+    resolve_profile_impl(name, project_path, &mut visited)
+}
+
+fn resolve_profile_impl(
+    name: &str,
+    project_path: Option<&Path>,
+    visited: &mut HashSet<String>,
+) -> Result<AgentProfile> {
+    // Check for cycles in inheritance
+    if visited.contains(name) {
+        bail!("inheritance cycle detected: profile '{}' extends itself", name);
+    }
+    visited.insert(name.to_string());
+
+    // 1. Project-level: .rustagent/profiles/{name}.toml
+    if let Some(path) = project_path {
+        let profile_path = path.join(".rustagent/profiles").join(format!("{}.toml", name));
+        if profile_path.exists() {
+            let content = std::fs::read_to_string(&profile_path)?;
+            let mut profile: AgentProfile = toml::from_str(&content)?;
+            if let Some(parent_name) = &profile.extends.clone() {
+                let parent = resolve_profile_impl(parent_name, project_path, visited)?;
+                profile.apply_inheritance(&parent);
+            }
+            return Ok(profile);
+        }
+    }
+
+    // 2. User-level: ~/.config/rustagent/profiles/{name}.toml
+    if let Some(config_dir) = dirs::config_dir() {
+        let profile_path = config_dir
+            .join("rustagent/profiles")
+            .join(format!("{}.toml", name));
+        if profile_path.exists() {
+            let content = std::fs::read_to_string(&profile_path)?;
+            let mut profile: AgentProfile = toml::from_str(&content)?;
+            if let Some(parent_name) = &profile.extends.clone() {
+                let parent = resolve_profile_impl(parent_name, project_path, visited)?;
+                profile.apply_inheritance(&parent);
+            }
+            return Ok(profile);
+        }
+    }
+
+    // 3. Built-in profiles
+    match name {
+        "planner" => Ok(crate::agent::builtin_profiles::planner()),
+        "coder" => Ok(crate::agent::builtin_profiles::coder()),
+        "reviewer" => Ok(crate::agent::builtin_profiles::reviewer()),
+        "tester" => Ok(crate::agent::builtin_profiles::tester()),
+        "researcher" => Ok(crate::agent::builtin_profiles::researcher()),
+        _ => bail!("Unknown profile: {}", name),
     }
 }
