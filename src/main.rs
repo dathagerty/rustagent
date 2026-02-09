@@ -1,5 +1,5 @@
 use rustagent::graph::store::GraphStore;
-use rustagent::{config, db, logging, planning, project, ralph};
+use rustagent::{config, db, logging, planning, project};
 
 use clap::{CommandFactory, Parser, Subcommand};
 use std::path::PathBuf;
@@ -30,11 +30,14 @@ enum Commands {
         #[arg(long)]
         spec_dir: Option<String>,
     },
-    /// Execute a plan
+    /// Execute a goal with an agent
     Run {
-        /// Path to the specification file
-        spec_file: String,
-        /// Maximum number of iterations
+        /// Goal description
+        goal: String,
+        /// Agent profile to use
+        #[arg(long, default_value = "coder")]
+        profile: String,
+        /// Maximum iterations
         #[arg(long)]
         max_iterations: Option<usize>,
     },
@@ -287,16 +290,163 @@ async fn main() -> anyhow::Result<()> {
             agent.run().await?;
         }
         Commands::Run {
-            spec_file,
+            goal,
+            profile,
             max_iterations,
         } => {
             // Load config from standard locations
             let config_path = find_config_path()?;
             let config = config::Config::load(&config_path)?;
 
-            // Create and run Ralph loop
-            let ralph = ralph::RalphLoop::new(config, spec_file.clone(), max_iterations)?;
-            ralph.run().await?;
+            // Open database
+            let db_path = db_path()?;
+            let database = db::Database::open(&db_path).await?;
+
+            // Resolve project
+            let project_opt = resolve_project(&database, cli.project.as_deref()).await?;
+            let project = project_opt
+                .ok_or_else(|| anyhow::anyhow!("No project specified or found in current directory"))?;
+
+            // Create goal node in graph
+            let graph_store = std::sync::Arc::new(
+                rustagent::graph::store::SqliteGraphStore::new(database.clone())
+            );
+
+            let goal_id = rustagent::graph::generate_goal_id();
+            let goal_node = rustagent::graph::GraphNode {
+                id: goal_id.clone(),
+                project_id: project.id.clone(),
+                node_type: rustagent::graph::NodeType::Goal,
+                title: goal.clone(),
+                description: goal.clone(),
+                status: rustagent::graph::NodeStatus::Active,
+                priority: None,
+                assigned_to: None,
+                created_by: None,
+                labels: vec!["agent_run".to_string()],
+                created_at: chrono::Utc::now(),
+                started_at: Some(chrono::Utc::now()),
+                completed_at: None,
+                blocked_reason: None,
+                metadata: std::collections::HashMap::new(),
+            };
+
+            graph_store.create_node(&goal_node).await?;
+            println!("Created goal: {} ({})", goal, goal_id);
+
+            // Create session
+            let session_store = rustagent::graph::session::SessionStore::new(database.clone());
+            let session = session_store
+                .create_session(&goal_id, &profile)
+                .await?;
+            println!("Started session: {}", session.id);
+
+            // Resolve profile
+            let resolved_profile = rustagent::agent::profile::resolve_profile(
+                &profile,
+                Some(&project.path),
+            )?;
+
+            // Build AgentContext
+            let agents_md_summaries = rustagent::context::resolve_agents_md(
+                &project.path,
+                &[],
+            ).unwrap_or_default();
+
+            let ctx = rustagent::agent::AgentContext {
+                work_package_tasks: vec![goal_node],
+                relevant_decisions: vec![],
+                handoff_notes: session.handoff_notes.clone(),
+                agents_md_summaries,
+                profile: resolved_profile.clone(),
+                project_path: project.path.clone(),
+                graph_store: graph_store.clone(),
+            };
+
+            // Create LLM client
+            let llm_client = rustagent::llm::factory::create_client(&config, &config.llm)?;
+
+            // Create tool registry
+            let security_validator = std::sync::Arc::new(
+                rustagent::security::SecurityValidator::new(config.security.clone())?
+            );
+            let permission_handler = std::sync::Arc::new(
+                rustagent::security::permission::CliPermissionHandler {}
+            );
+
+            let tool_registry = rustagent::tools::factory::create_v2_registry(
+                security_validator,
+                permission_handler,
+                graph_store.clone(),
+            );
+
+            // Create AgentRuntime
+            let runtime_config = rustagent::agent::runtime::RuntimeConfig {
+                max_turns: max_iterations.unwrap_or(100),
+                max_consecutive_llm_failures: 3,
+                max_consecutive_tool_failures: 3,
+                token_budget: resolved_profile.token_budget.unwrap_or(200_000),
+                token_budget_warning_pct: 80,
+            };
+
+            let runtime = rustagent::agent::runtime::AgentRuntime::new(
+                llm_client,
+                tool_registry,
+                resolved_profile.clone(),
+                runtime_config,
+            );
+
+            // Run the runtime
+            println!("Running agent with profile: {}", profile);
+            let outcome = runtime.run(ctx).await?;
+
+            // Handle outcome
+            match outcome {
+                rustagent::agent::AgentOutcome::Completed { summary } => {
+                    println!("Agent completed: {}", summary);
+                    graph_store.update_node(
+                        &goal_id,
+                        Some(rustagent::graph::NodeStatus::Completed),
+                        None,
+                        None,
+                        None,
+                    ).await?;
+                }
+                rustagent::agent::AgentOutcome::Blocked { reason } => {
+                    println!("Agent blocked: {}", reason);
+                    graph_store.update_node(
+                        &goal_id,
+                        Some(rustagent::graph::NodeStatus::Blocked),
+                        None,
+                        Some(&reason),
+                        None,
+                    ).await?;
+                }
+                rustagent::agent::AgentOutcome::Failed { error } => {
+                    println!("Agent failed: {}", error);
+                    graph_store.update_node(
+                        &goal_id,
+                        Some(rustagent::graph::NodeStatus::Failed),
+                        None,
+                        Some(&error),
+                        None,
+                    ).await?;
+                }
+                rustagent::agent::AgentOutcome::TokenBudgetExhausted { summary, tokens_used } => {
+                    println!("Token budget exhausted ({}): {}", tokens_used, summary);
+                    graph_store.update_node(
+                        &goal_id,
+                        Some(rustagent::graph::NodeStatus::Completed),
+                        None,
+                        Some(&format!("Token budget exhausted after {} tokens", tokens_used)),
+                        None,
+                    ).await?;
+                }
+            }
+
+            // End session
+            session_store.end_session(&session.id, &graph_store).await?;
+            println!("Session ended");
         }
         Commands::Project { action } => {
             // Open database
