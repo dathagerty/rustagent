@@ -1,6 +1,6 @@
 use rustagent::{config, logging, planning, ralph};
 
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, CommandFactory};
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -33,8 +33,6 @@ enum Commands {
         #[arg(long)]
         max_iterations: Option<usize>,
     },
-    /// Launch interactive TUI
-    Tui,
 }
 
 /// Find config file in standard locations
@@ -72,8 +70,11 @@ async fn main() -> anyhow::Result<()> {
 
     let cli = Cli::parse();
 
-    // Default to TUI if no command specified
-    let command = cli.command.unwrap_or(Commands::Tui);
+    // If no command specified, print help
+    let Some(command) = cli.command else {
+        Cli::command().print_help()?;
+        return Ok(());
+    };
 
     match command {
         Commands::Init { spec_dir } => {
@@ -128,23 +129,6 @@ async fn main() -> anyhow::Result<()> {
             // Create and run Ralph loop
             let ralph = ralph::RalphLoop::new(config, spec_file.clone(), max_iterations)?;
             ralph.run().await?;
-        }
-        Commands::Tui => {
-            let config_path = find_config_path()?;
-            let config = config::Config::load(&config_path)?;
-            let spec_dir = config.rustagent.spec_dir.clone();
-
-            use rustagent::tui::{self, agent_channel};
-
-            let mut terminal = tui::setup_terminal()?;
-            let (tx, mut rx) = agent_channel();
-            let mut app = tui::App::new(&spec_dir, tx, Some(config));
-
-            let result = tui::run(&mut terminal, &mut app, &mut rx).await;
-
-            tui::restore_terminal(&mut terminal)?;
-
-            result?;
         }
     }
 
