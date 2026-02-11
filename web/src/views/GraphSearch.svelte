@@ -5,7 +5,7 @@
    * Uses FTS5 search endpoint to find nodes by title/description.
    */
 
-  import { searchState, executeSearch, setQuery, setNodeTypeFilter, clearSearch } from '../stores/search.svelte';
+  import { searchState, executeSearch, setNodeTypeFilter } from '../stores/search.svelte';
   import { projectsState, getSelectedProject } from '../stores/projects.svelte';
   import SearchResult from '../components/SearchResult.svelte';
   import LoadingSpinner from '../components/LoadingSpinner.svelte';
@@ -71,14 +71,6 @@
     return searchState.nodeTypeFilter === type;
   }
 
-  /**
-   * Clear search on mount.
-   */
-  $effect(() => {
-    return () => {
-      // Cleanup on unmount
-    };
-  });
 </script>
 
 <div class="graph-search">

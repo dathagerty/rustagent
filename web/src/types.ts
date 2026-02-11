@@ -262,6 +262,16 @@ export type ImportRequest = {
 };
 
 /**
+ * Wrapper for WebSocket events with stable ID and arrival timestamp.
+ * Used to provide stable keys for Svelte's #each block diffing.
+ */
+export type FeedEvent = {
+  feedId: number;
+  event: WsEvent;
+  arrivedAt: string;
+};
+
+/**
  * WebSocket event discriminated union.
  * Rust: #[serde(tag = "type", rename_all = "snake_case")]
  * All events have a `type` field for discrimination.

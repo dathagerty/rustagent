@@ -4,21 +4,23 @@
  */
 
 import { apiClient } from '../api';
-import type { ActiveAgent, WsEvent } from '../types';
+import type { ActiveAgent, FeedEvent, WsEvent } from '../types';
 
 /**
  * Agents state object.
  * Managed as Svelte 5 $state for reactivity.
- * Event feed is a ring buffer (max 200 items, newest at index 0).
+ * Event feed is a ring buffer (max 200 items, oldest removed when cap exceeded).
  */
 export const agentsState = $state<{
   activeAgents: Array<ActiveAgent>;
-  eventFeed: Array<WsEvent>;
+  eventFeed: Array<FeedEvent>;
   loading: boolean;
+  feedIdCounter: number;
 }>({
   activeAgents: [],
   eventFeed: [],
   loading: false,
+  feedIdCounter: 0,
 });
 
 const MAX_FEED_SIZE = 200;
@@ -38,12 +40,18 @@ export async function loadAgents(goalId: string): Promise<void> {
 /**
  * Add an event to the feed.
  * Maintains a ring buffer by trimming to MAX_FEED_SIZE.
- * Newest events appear at index 0.
+ * Newest events appear at the end (terminal-like behavior).
+ * Wraps WsEvent in FeedEvent with stable feedId for Svelte diffing.
  */
 export function addEvent(event: WsEvent): void {
-  agentsState.eventFeed.unshift(event);
+  const feedEvent: FeedEvent = {
+    feedId: agentsState.feedIdCounter++,
+    event,
+    arrivedAt: new Date().toISOString(),
+  };
+  agentsState.eventFeed.push(feedEvent);
   if (agentsState.eventFeed.length > MAX_FEED_SIZE) {
-    agentsState.eventFeed.pop();
+    agentsState.eventFeed.shift();
   }
 }
 

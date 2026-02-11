@@ -10,7 +10,7 @@
   import { formatRelativeTime } from '../lib/date-formatting';
   import AgentStatusBadge from '../components/AgentStatusBadge.svelte';
   import LoadingSpinner from '../components/LoadingSpinner.svelte';
-  import type { WsEvent } from '../types';
+  import type { FeedEvent, WsEvent } from '../types';
 
   let currentRoute = $derived(getCurrentRoute());
   let goalId = $derived(currentRoute.params.goalId);
@@ -61,7 +61,8 @@
   /**
    * Format event for display based on type.
    */
-  function formatEventMessage(event: WsEvent): string {
+  function formatEventMessage(feedEvent: FeedEvent): string {
+    const event = feedEvent.event;
     switch (event.type) {
       case 'agent_spawned':
         return `Agent ${event.agent_id} spawned with profile ${event.profile} for goal ${event.goal_id}`;
@@ -79,7 +80,8 @@
   /**
    * Get event background color based on type.
    */
-  function getEventBgColor(event: WsEvent): string {
+  function getEventBgColor(feedEvent: FeedEvent): string {
+    const event = feedEvent.event;
     switch (event.type) {
       case 'agent_spawned':
         return 'rgba(59, 130, 246, 0.1)'; // blue
@@ -95,7 +97,8 @@
   /**
    * Get event text color based on type.
    */
-  function getEventTextColor(event: WsEvent): string {
+  function getEventTextColor(feedEvent: FeedEvent): string {
+    const event = feedEvent.event;
     switch (event.type) {
       case 'agent_spawned':
         return '#93c5fd'; // light blue
@@ -109,11 +112,11 @@
   }
 
   /**
-   * Get event timestamp with relative time update trigger.
+   * Get event timestamp with relative time.
+   * Accepts relativeTimeCounter parameter to create reactive dependency for periodic updates.
    */
-  function getEventTime(event: WsEvent): string {
-    const timestamp = 'created_at' in event ? event.created_at : new Date().toISOString();
-    return formatRelativeTime(timestamp);
+  function getEventTime(feedEvent: FeedEvent, _tick: number): string {
+    return formatRelativeTime(feedEvent.arrivedAt);
   }
 </script>
 
@@ -158,13 +161,13 @@
             <p>No agent activity yet. Events will appear here as agents run.</p>
           </div>
         {/if}
-        {#each agentsState.eventFeed as event (event.type + Math.random())}
+        {#each agentsState.eventFeed as feedEvent (feedEvent.feedId)}
           <div
             class="event-item"
-            style="background-color: {getEventBgColor(event)}; color: {getEventTextColor(event)}"
+            style="background-color: {getEventBgColor(feedEvent)}; color: {getEventTextColor(feedEvent)}"
           >
-            <span class="event-time">{getEventTime(event)}</span>
-            <span class="event-message">{formatEventMessage(event)}</span>
+            <span class="event-time">{getEventTime(feedEvent, relativeTimeCounter)}</span>
+            <span class="event-message">{formatEventMessage(feedEvent)}</span>
           </div>
         {/each}
       </div>
