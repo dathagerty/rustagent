@@ -9,7 +9,7 @@
    */
 
   import { getCurrentRoute } from '../router.svelte';
-  import { graphState, loadGoalTree, loadReadyTasks, selectNode } from '../stores/graph.svelte';
+  import { graphState, loadGoalTree, loadReadyTasks, selectNode, clearSelection } from '../stores/graph.svelte';
   import { apiClient } from '../api';
   import { buildTree, countTaskStats, type TreeNode } from '../lib/tree';
   import type { GraphNode } from '../types';
@@ -62,7 +62,7 @@
   // Update node expanded state in tree
   function toggleNodeExpanded(nodeId: string): void {
     if (nodeExpandedState[nodeId] === undefined) {
-      nodeExpandedState[nodeId] = !true; // Start with expanded=true from buildTree
+      nodeExpandedState[nodeId] = false; // Start with expanded=true from buildTree
     } else {
       nodeExpandedState[nodeId] = !nodeExpandedState[nodeId];
     }
@@ -116,7 +116,7 @@
           <TreeNodeRow
             treeNode={displayTree}
             depth={0}
-            isSelected={graphState.selectedNodeId === displayTree.node.id}
+            selectedNodeId={graphState.selectedNodeId}
             onSelect={selectNode}
             onToggleExpanded={toggleNodeExpanded}
           />
@@ -128,32 +128,35 @@
         {#if graphState.selectedNodeDetail}
           <div class="detail-header">
             <h3>Node Details</h3>
-            <button class="close-btn" onclick={() => selectNode('')}>✕</button>
+            <button class="close-btn" onclick={() => clearSelection()}>✕</button>
           </div>
           <div class="detail-content">
             <GraphNodeCard node={graphState.selectedNodeDetail.node} />
 
-            {#if graphState.selectedNodeDetail.dependencies && graphState.selectedNodeDetail.dependencies.length > 0}
-              <div class="dependencies-section">
-                <h4>Dependencies</h4>
-                <ul class="dependency-list">
-                  {#each graphState.selectedNodeDetail.dependencies as dep (dep.id)}
-                    <li>
-                      <button class="link-btn" onclick={() => selectNode(dep.id)}>
-                        {dep.title} ({dep.id})
-                      </button>
-                    </li>
-                  {/each}
-                </ul>
-              </div>
+            {#if graphState.selectedNodeDetail.outgoing_edges}
+              {@const dependsOnEdges = graphState.selectedNodeDetail.outgoing_edges.filter(([edge]) => edge.edge_type === 'dependson')}
+              {#if dependsOnEdges.length > 0}
+                <div class="dependencies-section">
+                  <h4>Dependencies</h4>
+                  <ul class="dependency-list">
+                    {#each dependsOnEdges as [edge, depNode] (edge.id)}
+                      <li>
+                        <button class="link-btn" onclick={() => selectNode(depNode.id)}>
+                          {depNode.title} ({depNode.id})
+                        </button>
+                      </li>
+                    {/each}
+                  </ul>
+                </div>
+              {/if}
             {/if}
 
             {#if graphState.selectedNodeDetail.incoming_edges && graphState.selectedNodeDetail.incoming_edges.length > 0}
               <div class="edges-section">
                 <h4>Incoming Edges</h4>
                 <ul class="edges-list">
-                  {#each graphState.selectedNodeDetail.incoming_edges as edge (edge.id)}
-                    <li>{edge.edge_type}: {edge.from_node}</li>
+                  {#each graphState.selectedNodeDetail.incoming_edges as [edge, sourceNode] (edge.id)}
+                    <li>{edge.edge_type}: {sourceNode.title} ({sourceNode.id})</li>
                   {/each}
                 </ul>
               </div>
@@ -163,8 +166,8 @@
               <div class="edges-section">
                 <h4>Outgoing Edges</h4>
                 <ul class="edges-list">
-                  {#each graphState.selectedNodeDetail.outgoing_edges as edge (edge.id)}
-                    <li>{edge.edge_type}: {edge.to_node}</li>
+                  {#each graphState.selectedNodeDetail.outgoing_edges as [edge, targetNode] (edge.id)}
+                    <li>{edge.edge_type}: {targetNode.title} ({targetNode.id})</li>
                   {/each}
                 </ul>
               </div>

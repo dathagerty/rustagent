@@ -13,16 +13,17 @@
   type Props = {
     treeNode: TreeNode;
     depth: number;
-    isSelected?: boolean;
+    selectedNodeId?: string | null;
     onSelect?: (nodeId: string) => void;
     onToggleExpanded?: (nodeId: string) => void;
   };
 
-  let { treeNode, depth, isSelected = false, onSelect, onToggleExpanded }: Props = $props();
+  let { treeNode, depth, selectedNodeId = null, onSelect, onToggleExpanded }: Props = $props();
 
   const node = $derived(treeNode.node);
   const hasChildren = $derived(treeNode.children.length > 0);
   const hasDependencies = $derived(treeNode.dependencies.length > 0);
+  const isSelected = $derived(selectedNodeId === node.id);
 
   function handleClick(): void {
     onSelect?.(node.id);
@@ -69,7 +70,7 @@
 
       {#if hasDependencies}
         <span class="dependency-indicator">
-          blocked by: {treeNode.dependencies.map((d) => d.id).join(', ')}
+          depends on: {treeNode.dependencies.map((d) => d.id).join(', ')}
         </span>
       {/if}
     </div>
@@ -81,7 +82,7 @@
     <TreeNodeRow
       treeNode={child}
       depth={depth + 1}
-      isSelected={isSelected && child.node.id === node.id}
+      {selectedNodeId}
       {onSelect}
       {onToggleExpanded}
     />
