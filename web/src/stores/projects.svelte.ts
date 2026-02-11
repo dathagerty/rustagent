@@ -23,16 +23,16 @@ export const projectsState = $state<{
 });
 
 /**
- * Derived: the currently selected project, or null if none selected.
+ * Get the currently selected project, or null if none selected.
  */
-export const selectedProject = $derived.by(() => {
+export function getSelectedProject(): ProjectResponse | null {
   if (!projectsState.selectedProjectId) {
     return null;
   }
   return (
     projectsState.projects.find((p) => p.id === projectsState.selectedProjectId) || null
   );
-});
+}
 
 const apiClient = createApiClient();
 

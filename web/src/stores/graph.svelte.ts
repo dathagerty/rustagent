@@ -42,19 +42,19 @@ export const graphState = $state<{
 });
 
 /**
- * Derived: goal nodes from the current goal tree.
+ * Get goal nodes from the current goal tree.
  */
-export const goalNodes = $derived.by(() => {
+export function getGoalNodes(): Array<GraphNode> {
   if (!graphState.goalTree) {
     return [];
   }
   return graphState.goalTree.nodes.filter((n) => n.node_type === 'goal');
-});
+}
 
 /**
- * Derived: tasks grouped by status.
+ * Get tasks grouped by status.
  */
-export const tasksByStatus = $derived.by(() => {
+export function getTasksByStatus(): Record<NodeStatus, Array<GraphNode>> {
   const result: Record<NodeStatus, Array<GraphNode>> = {} as Record<
     NodeStatus,
     Array<GraphNode>
@@ -68,7 +68,7 @@ export const tasksByStatus = $derived.by(() => {
   }
 
   return result;
-});
+}
 
 const apiClient = createApiClient();
 
