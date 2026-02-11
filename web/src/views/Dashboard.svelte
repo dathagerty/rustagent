@@ -14,7 +14,7 @@
   import ErrorMessage from '../components/ErrorMessage.svelte';
   import StatusBadge from '../components/StatusBadge.svelte';
   import PriorityBadge from '../components/PriorityBadge.svelte';
-  import type { GraphNode, ActiveAgent } from '../types';
+  import type { GraphNode } from '../types';
 
   type DashboardData = {
     projectGoals: Array<{ projectName: string; goalCount: number; projectId: string }>;
@@ -33,24 +33,40 @@
 
   /**
    * Load dashboard data on mount.
+   * Read reactive dependencies synchronously, then call async function.
    */
-  $effect(async () => {
+  $effect(() => {
+    // Read reactive deps synchronously so Svelte tracks them
+    const projects = projectsState.projects;
+    loadDashboardData(projects);
+  });
+
+  /**
+   * Async function to load all dashboard data.
+   * Parallelizes goal fetches per-project, then parallelizes agent fetches.
+   */
+  async function loadDashboardData(projects: typeof projectsState.projects): Promise<void> {
     try {
       loading = true;
       error = null;
 
-      // Load all projects
+      // Load all projects first
       await loadProjects();
 
-      // For each project, load its goals
+      // Fetch goals for all projects in parallel using Promise.allSettled
+      const goalResults = await Promise.allSettled(
+        projects.map((project) => apiClient.listGoals(project.id))
+      );
+
       const projectGoals: DashboardData['projectGoals'] = [];
       const allActiveGoals: DashboardData['activeGoals'] = [];
-      let totalActiveAgents = 0;
+      const agentFetchPromises: Promise<any>[] = [];
 
-      for (const project of projectsState.projects) {
-        try {
-          // Get goals for this project
-          const goals = await apiClient.listGoals(project.id);
+      // Process goal results
+      goalResults.forEach((result, idx) => {
+        const project = projects[idx];
+        if (result.status === 'fulfilled') {
+          const goals = result.value;
           projectGoals.push({
             projectName: project.name,
             goalCount: goals.length,
@@ -59,25 +75,29 @@
 
           // Collect active goals
           const activeGoalsForProject = goals.filter((g) => g.status === 'active');
-          for (const goal of activeGoalsForProject) {
+          activeGoalsForProject.forEach((goal) => {
             allActiveGoals.push({
               goal,
               projectName: project.name,
             });
 
-            // Count active agents for this goal
-            try {
-              const agents = await apiClient.listAgents(goal.id);
-              totalActiveAgents += agents.length;
-            } catch {
-              // Ignore errors fetching agents for individual goals
-            }
-          }
-        } catch {
-          // Ignore errors fetching goals for individual projects
-          // Continue with next project
+            // Queue agent fetch for this goal
+            agentFetchPromises.push(
+              apiClient.listAgents(goal.id).catch(() => []) // Return empty array on error
+            );
+          });
         }
-      }
+      });
+
+      // Fetch all agents in parallel using Promise.allSettled
+      const agentResults = await Promise.allSettled(agentFetchPromises);
+
+      let totalActiveAgents = 0;
+      agentResults.forEach((result) => {
+        if (result.status === 'fulfilled') {
+          totalActiveAgents += result.value.length;
+        }
+      });
 
       dashboardData = {
         projectGoals,
@@ -89,7 +109,7 @@
     } finally {
       loading = false;
     }
-  });
+  }
 
   /**
    * Handle project click - navigate to project detail.

@@ -6,6 +6,7 @@
 
   import { loadProjects, projectsState } from '../stores/projects.svelte';
   import { navigate } from '../router.svelte';
+  import { formatDate } from '../lib/date-formatting';
   import LoadingSpinner from '../components/LoadingSpinner.svelte';
   import ErrorMessage from '../components/ErrorMessage.svelte';
 
@@ -14,8 +15,17 @@
 
   /**
    * Load projects on mount.
+   * Read reactive dependencies synchronously, then call async function.
    */
-  $effect(async () => {
+  $effect(() => {
+    // Synchronously trigger load on mount
+    loadProjectsData();
+  });
+
+  /**
+   * Async function to load projects.
+   */
+  async function loadProjectsData(): Promise<void> {
     try {
       loading = true;
       error = null;
@@ -24,22 +34,6 @@
       error = err instanceof Error ? err.message : 'Unknown error';
     } finally {
       loading = false;
-    }
-  });
-
-  /**
-   * Format a date string into human-readable format.
-   */
-  function formatDate(dateStr: string): string {
-    try {
-      const date = new Date(dateStr);
-      return date.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      });
-    } catch {
-      return dateStr;
     }
   }
 

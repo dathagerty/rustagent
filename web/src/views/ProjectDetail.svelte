@@ -8,6 +8,7 @@
   import { apiClient } from '../api';
   import { getCurrentRoute } from '../router.svelte';
   import { navigate } from '../router.svelte';
+  import { formatDate } from '../lib/date-formatting';
   import LoadingSpinner from '../components/LoadingSpinner.svelte';
   import ErrorMessage from '../components/ErrorMessage.svelte';
   import StatusBadge from '../components/StatusBadge.svelte';
@@ -40,22 +41,31 @@
 
   /**
    * Load project details, goals, and decisions on mount or when projectId changes.
+   * Read reactive dependencies synchronously, then call async function.
    */
-  $effect(async () => {
-    if (!projectId) {
+  $effect(() => {
+    // Read reactive deps synchronously so Svelte tracks them
+    const id = projectId;
+    if (!id) {
       error = 'No project ID provided';
       return;
     }
+    loadProjectDetail(id);
+  });
 
+  /**
+   * Async function to load project details.
+   */
+  async function loadProjectDetail(id: string): Promise<void> {
     try {
       loading = true;
       error = null;
 
       // Load project
-      const project = await apiClient.getProject(projectId);
+      const project = await apiClient.getProject(id);
 
       // Load goals
-      const goals = await apiClient.listGoals(projectId);
+      const goals = await apiClient.listGoals(id);
 
       // For each goal, load its tree to count tasks
       const goalsWithTasks: Array<GoalWithTasks> = [];
@@ -80,7 +90,7 @@
       }
 
       // Load decisions
-      const decisions = await apiClient.listDecisions(projectId);
+      const decisions = await apiClient.listDecisions(id);
 
       projectData = {
         project,
@@ -91,22 +101,6 @@
       error = err instanceof Error ? err.message : 'Unknown error';
     } finally {
       loading = false;
-    }
-  });
-
-  /**
-   * Format a date string into human-readable format.
-   */
-  function formatDate(dateStr: string): string {
-    try {
-      const date = new Date(dateStr);
-      return date.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      });
-    } catch {
-      return dateStr;
     }
   }
 
@@ -138,7 +132,9 @@
   }
 
   function handleDecisionClick(decisionId: string): void {
-    navigate(`/goals/${decisionId}/decisions`);
+    // Extract goal ID from hierarchical node ID (format: ra-XXXX.N)
+    const goalId = decisionId.split('.')[0];
+    navigate(`/goals/${goalId}/decisions`);
   }
 </script>
 
