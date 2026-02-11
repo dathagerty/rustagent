@@ -1,13 +1,13 @@
 # Rustagent
 
-Last verified: 2026-02-09
+Last verified: 2026-02-11
 
 ## Project Overview
 
 Rustagent is a Rust-based AI agent framework for autonomous task execution. The architecture has two layers:
 
 - **V1 (legacy)**: Planning Agent + Ralph Loop using flat JSON specs
-- **V2 (current)**: Graph-based work tracking with typed agent profiles, SQLite persistence, and an agentic runtime loop
+- **V2 (current)**: Graph-based work tracking with typed agent profiles, SQLite persistence, an agentic runtime loop, and a Svelte 5 web dashboard
 
 V2 is the active development path. V1 modules (`planning/`, `ralph/`, `spec.rs`) remain for backward compatibility.
 
@@ -22,6 +22,14 @@ cargo clippy             # Lint
 cargo test               # Run full test suite
 cargo test <name>        # Run specific test by name
 cargo doc --open         # Generate and view documentation
+```
+
+### Web UI Commands
+```bash
+cd web && bun install    # Install frontend dependencies
+cd web && bun run dev    # Dev server (Vite proxy to daemon:7400)
+cd web && bun run build  # Production build to web/dist/
+cd web && bun run test   # Run vitest tests
 ```
 
 ### V2 CLI Commands
@@ -41,6 +49,13 @@ cargo run -- graph adr <goal-id>         # Export decisions as ADR markdown
 ## Project Structure
 
 ```
+web/                    # Svelte 5 Web UI (see web/AGENTS.md)
+├── src/api/            # HTTP client + WebSocket handler
+├── src/stores/         # Reactive stores (projects, graph, agents, search)
+├── src/views/          # 8 view components
+├── src/components/     # Reusable UI components
+├── src/lib/            # Utilities (tree transform, decision graph, date formatting)
+└── dist/               # Production build output (embedded via rust-embed)
 src/
 ├── main.rs             # CLI entry point (clap), V1 + V2 commands
 ├── lib.rs              # Library exports: all public modules
@@ -94,11 +109,19 @@ src/
 
 ## Key Dependencies
 
+### Rust
 - `rusqlite` (bundled) + `tokio-rusqlite` for async SQLite
 - `blake3` for content hashing (interchange format)
 - `clap` (derive) for CLI
 - `chrono` for timestamps (RFC 3339 everywhere)
 - `uuid` v4 for ID generation
+
+### Web UI (Bun/npm)
+- `svelte` 5 (runes) + `@sveltejs/vite-plugin-svelte` for UI framework
+- `vite` 6 for build tooling and dev server
+- `cytoscape` + `cytoscape-dagre` for decision graph visualization
+- `vitest` for frontend tests
+- `typescript` 5 for type safety
 
 ## Conventions
 
