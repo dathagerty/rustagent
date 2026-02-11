@@ -68,7 +68,7 @@
   const createdDisplay = $derived(formatTimestamp(node.created_at));
 </script>
 
-<div class="card" {onclick}>
+<div class="card" role="button" tabindex="0" {onclick} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onclick?.(); } }}>
   <div class="card-header">
     <h3 class="title">{node.title}</h3>
     <div class="badges">
