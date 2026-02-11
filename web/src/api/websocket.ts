@@ -7,6 +7,22 @@
 import type { WsEvent } from '../types';
 
 /**
+ * Set of known WebSocket event types for validation.
+ * Used in handleMessage() for O(1) forward-compatibility checking.
+ */
+const KNOWN_EVENT_TYPES = new Set<string>([
+  'agent_spawned',
+  'agent_progress',
+  'agent_completed',
+  'node_created',
+  'node_status_changed',
+  'edge_created',
+  'session_ended',
+  'tool_execution',
+  'orchestrator_state_changed',
+]);
+
+/**
  * Manages a WebSocket connection to the daemon.
  * Handles automatic reconnection with exponential backoff.
  */
@@ -147,20 +163,8 @@ export class WsConnection {
       }
 
       // Type-narrow to WsEvent based on type field
-      // List of known event types for forward compatibility check
-      const knownTypes = [
-        'agent_spawned',
-        'agent_progress',
-        'agent_completed',
-        'node_created',
-        'node_status_changed',
-        'edge_created',
-        'session_ended',
-        'tool_execution',
-        'orchestrator_state_changed',
-      ];
-
-      if (!knownTypes.includes(parsed.type)) {
+      // Check against known event types for forward compatibility
+      if (!KNOWN_EVENT_TYPES.has(parsed.type)) {
         console.warn('WebSocket message with unknown event type:', parsed.type);
         return;
       }

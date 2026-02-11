@@ -53,7 +53,7 @@ export type Priority = 'critical' | 'high' | 'medium' | 'low';
  * Graph node representing a work item.
  * 15 fields matching the Rust GraphNode struct.
  */
-export interface GraphNode {
+export type GraphNode = {
   id: string;
   project_id: string;
   node_type: NodeType;
@@ -69,191 +69,197 @@ export interface GraphNode {
   completed_at: string | null;
   blocked_reason: string | null;
   metadata: Record<string, string>;
-}
+};
 
 /**
  * Graph edge representing a relationship between nodes.
  * 6 fields matching the Rust GraphEdge struct.
  */
-export interface GraphEdge {
+export type GraphEdge = {
   id: string;
   edge_type: EdgeType;
   from_node: string;
   to_node: string;
   label: string | null;
   created_at: string;
-}
+};
 
 /**
  * Project metadata response.
  */
-export interface ProjectResponse {
+export type ProjectResponse = {
   id: string;
   name: string;
   path: string;
   registered_at: string;
-}
+};
 
 /**
  * Session tracking agent work on a goal.
  */
-export interface Session {
+export type Session = {
   id: string;
   project_id: string;
   goal_id: string;
   started_at: string;
   ended_at: string | null;
   handoff_notes: string | null;
-  agent_ids: string[];
+  agent_ids: Array<string>;
   summary: string | null;
-}
+};
 
 /**
  * Currently active agent on a task.
  */
-export interface ActiveAgent {
+export type ActiveAgent = {
   agent_id: string;
   task_id: string;
   task_title: string;
   task_status: NodeStatus;
-}
+};
 
 // Composite response types
 
 /**
  * Node with its incoming and outgoing edges.
  */
-export interface NodeWithEdges {
+export type NodeWithEdges = {
   node: GraphNode;
-  incoming_edges: [GraphEdge, GraphNode][];
-  outgoing_edges: [GraphEdge, GraphNode][];
-}
+  incoming_edges: Array<[GraphEdge, GraphNode]>;
+  outgoing_edges: Array<[GraphEdge, GraphNode]>;
+};
 
 /**
  * Goal tree structure: nodes and edges for a goal subtree.
  */
-export interface GoalTree {
-  nodes: GraphNode[];
-  edges: GraphEdge[];
-}
+export type GoalTree = {
+  nodes: Array<GraphNode>;
+  edges: Array<GraphEdge>;
+};
 
 /**
  * Decision history: nodes and edges for decisions and choices.
  */
-export interface DecisionHistory {
-  nodes: GraphNode[];
-  edges: GraphEdge[];
-}
+export type DecisionHistory = {
+  nodes: Array<GraphNode>;
+  edges: Array<GraphEdge>;
+};
 
 /**
  * Result of exporting a goal to TOML.
  */
-export interface ExportResult {
+export type ExportResult = {
   goal_id: string;
   toml: string;
-}
+};
 
 /**
  * Conflict when importing a graph.
  */
-export interface ImportConflict {
+export type ImportConflict = {
   node_id: string;
   field: string;
   db_value: string;
   file_value: string;
-}
+};
 
 /**
  * Result of importing a graph.
  */
-export interface ImportResult {
+export type ImportResult = {
   added_nodes: number;
   added_edges: number;
-  conflicts: ImportConflict[];
-  skipped_edges: string[];
+  conflicts: Array<ImportConflict>;
+  skipped_edges: Array<string>;
   unchanged: number;
-}
+};
 
 /**
  * Diff result comparing a graph to the database.
  */
-export interface DiffResult {
-  added_nodes: string[];
-  changed_nodes: [string, string[]][];
-  removed_nodes: string[];
-  added_edges: string[];
-  removed_edges: string[];
+export type DiffResult = {
+  added_nodes: Array<string>;
+  changed_nodes: Array<[string, Array<string>]>;
+  removed_nodes: Array<string>;
+  added_edges: Array<string>;
+  removed_edges: Array<string>;
   unchanged_nodes: number;
   unchanged_edges: number;
-}
+};
 
 // Request body types
 
 /**
  * Create project request.
  */
-export interface CreateProjectRequest {
+export type CreateProjectRequest = {
   name: string;
   path: string;
-}
+};
+
 
 /**
  * Create goal request.
  */
-export interface CreateGoalRequest {
+export type CreateGoalRequest = {
   title: string;
   description: string;
   priority?: Priority;
-}
+};
+
 
 /**
  * Update node request.
  */
-export interface UpdateNodeRequest {
+export type UpdateNodeRequest = {
   status?: string;
   title?: string;
   description?: string;
   blocked_reason?: string;
   metadata?: Record<string, string>;
-}
+};
+
 
 /**
  * Create child node request.
  */
-export interface CreateChildRequest {
+export type CreateChildRequest = {
   node_type: NodeType;
   title: string;
   description: string;
   priority?: Priority;
   metadata?: Record<string, string>;
-}
+};
+
 
 /**
  * Create edge request.
  */
-export interface CreateEdgeRequest {
+export type CreateEdgeRequest = {
   edge_type: EdgeType;
   from_node: string;
   to_node: string;
   label?: string;
-}
+};
+
 
 /**
  * Search request for nodes.
  */
-export interface SearchRequest {
+export type SearchRequest = {
   query: string;
   node_type?: NodeType;
   limit?: number;
-}
+};
+
 
 /**
  * Import graph request.
  */
-export interface ImportRequest {
+export type ImportRequest = {
   toml: string;
   strategy?: 'merge' | 'theirs' | 'ours';
-}
+};
 
 /**
  * WebSocket event discriminated union.

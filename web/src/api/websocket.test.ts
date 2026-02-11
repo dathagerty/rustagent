@@ -47,14 +47,14 @@ class MockWebSocket {
 }
 
 // Replace global WebSocket with mock
-const originalWebSocket = (globalThis as any).WebSocket;
+const originalWebSocket = (globalThis as Record<string, unknown>).WebSocket;
 beforeEach(() => {
-  (globalThis as any).WebSocket = MockWebSocket;
+  (globalThis as Record<string, unknown>).WebSocket = MockWebSocket;
   vi.useFakeTimers();
 });
 
 afterEach(() => {
-  (globalThis as any).WebSocket = originalWebSocket;
+  (globalThis as Record<string, unknown>).WebSocket = originalWebSocket;
   vi.useRealTimers();
   MockWebSocket.lastInstance = undefined;
 });
@@ -324,11 +324,39 @@ describe('WsConnection', () => {
         tokens_used: 1000,
       },
       {
+        type: 'node_created',
+        parent_id: null,
+        id: 'node-1',
+        project_id: 'proj-1',
+        node_type: 'task',
+        title: 'New Task',
+        description: 'Task description',
+        status: 'pending',
+        priority: 'high',
+        assigned_to: null,
+        created_by: null,
+        labels: [],
+        created_at: '2026-02-11T00:00:00Z',
+        started_at: null,
+        completed_at: null,
+        blocked_reason: null,
+        metadata: {},
+      },
+      {
         type: 'node_status_changed',
         node_id: 'node-1',
         node_type: 'task',
         old_status: 'pending',
         new_status: 'completed',
+      },
+      {
+        type: 'edge_created',
+        id: 'edge-1',
+        edge_type: 'contains',
+        from_node: 'goal-1',
+        to_node: 'node-1',
+        label: null,
+        created_at: '2026-02-11T00:00:00Z',
       },
       {
         type: 'session_ended',

@@ -42,11 +42,7 @@ export class ApiError extends Error {
  * Base URL defaults to empty string for same-origin requests (via Vite proxy in dev).
  */
 export class ApiClient {
-  baseUrl: string;
-
-  constructor(baseUrl = '') {
-    this.baseUrl = baseUrl;
-  }
+  constructor(private readonly baseUrl: string = '') {}
 
   /**
    * Generic request method with error handling.
@@ -78,7 +74,7 @@ export class ApiClient {
 
   // ============ Projects ============
 
-  async listProjects(): Promise<ProjectResponse[]> {
+  async listProjects(): Promise<Array<ProjectResponse>> {
     return this.request('GET', '/api/projects');
   }
 
@@ -96,7 +92,7 @@ export class ApiClient {
 
   // ============ Goals ============
 
-  async listGoals(projectId: string): Promise<GraphNode[]> {
+  async listGoals(projectId: string): Promise<Array<GraphNode>> {
     return this.request('GET', `/api/projects/${projectId}/goals`);
   }
 
@@ -134,11 +130,11 @@ export class ApiClient {
     return this.request('GET', `/api/goals/${goalId}/tree`);
   }
 
-  async listTasks(goalId: string): Promise<GraphNode[]> {
+  async listTasks(goalId: string): Promise<Array<GraphNode>> {
     return this.request('GET', `/api/goals/${goalId}/tasks`);
   }
 
-  async listReadyTasks(goalId: string): Promise<GraphNode[]> {
+  async listReadyTasks(goalId: string): Promise<Array<GraphNode>> {
     return this.request('GET', `/api/goals/${goalId}/tasks/ready`);
   }
 
@@ -148,7 +144,7 @@ export class ApiClient {
 
   // ============ Decisions ============
 
-  async listDecisions(projectId: string): Promise<GraphNode[]> {
+  async listDecisions(projectId: string): Promise<Array<GraphNode>> {
     return this.request('GET', `/api/projects/${projectId}/decisions`);
   }
 
@@ -156,13 +152,13 @@ export class ApiClient {
     return this.request('GET', `/api/projects/${projectId}/decisions/history`);
   }
 
-  async exportDecisions(projectId: string): Promise<string[]> {
+  async exportDecisions(projectId: string): Promise<Array<string>> {
     return this.request('POST', `/api/projects/${projectId}/decisions/export`);
   }
 
   // ============ Graph Import/Export ============
 
-  async exportAllGoals(projectId: string): Promise<ExportResult[]> {
+  async exportAllGoals(projectId: string): Promise<Array<ExportResult>> {
     return this.request('GET', `/api/projects/${projectId}/graph/export`);
   }
 
@@ -180,7 +176,7 @@ export class ApiClient {
 
   // ============ Sessions ============
 
-  async listSessions(goalId: string): Promise<Session[]> {
+  async listSessions(goalId: string): Promise<Array<Session>> {
     return this.request('GET', `/api/goals/${goalId}/sessions`);
   }
 
@@ -190,13 +186,13 @@ export class ApiClient {
 
   // ============ Search ============
 
-  async searchNodes(projectId: string, req: SearchRequest): Promise<GraphNode[]> {
+  async searchNodes(projectId: string, req: SearchRequest): Promise<Array<GraphNode>> {
     return this.request('POST', `/api/projects/${projectId}/search`, req);
   }
 
   // ============ Agents ============
 
-  async listAgents(goalId: string): Promise<ActiveAgent[]> {
+  async listAgents(goalId: string): Promise<Array<ActiveAgent>> {
     return this.request('GET', `/api/goals/${goalId}/agents`);
   }
 
