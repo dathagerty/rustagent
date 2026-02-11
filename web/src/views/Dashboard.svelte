@@ -7,6 +7,7 @@
    * Fetches data from daemon API via stores.
    */
 
+  import type { ActiveAgent } from '../types';
   import { loadProjects, projectsState } from '../stores/projects.svelte';
   import { apiClient } from '../api';
   import { navigate } from '../router.svelte';
@@ -60,7 +61,7 @@
 
       const projectGoals: DashboardData['projectGoals'] = [];
       const allActiveGoals: DashboardData['activeGoals'] = [];
-      const agentFetchPromises: Promise<any>[] = [];
+      const agentFetchPromises: Array<Promise<Array<ActiveAgent>>> = [];
 
       // Process goal results
       goalResults.forEach((result, idx) => {
