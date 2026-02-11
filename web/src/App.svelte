@@ -15,6 +15,7 @@
   import ProjectList from './views/ProjectList.svelte';
   import ProjectDetail from './views/ProjectDetail.svelte';
   import TaskTree from './views/TaskTree.svelte';
+  import DecisionGraph from './views/DecisionGraph.svelte';
   import Placeholder from './views/Placeholder.svelte';
 
   let wsConnection: ReturnType<typeof createWsConnection> | null = null;
@@ -60,7 +61,7 @@
     {:else if currentRoute.name === 'task-tree'}
       <TaskTree />
     {:else if currentRoute.name === 'decision-graph'}
-      <Placeholder name="Decision Graph" />
+      <DecisionGraph />
     {:else if currentRoute.name === 'agent-monitor'}
       <Placeholder name="Agent Monitor" />
     {:else if currentRoute.name === 'session-history'}
