@@ -29,7 +29,7 @@ import type {
  */
 export class ApiError extends Error {
   constructor(
-    public status: number,
+    public readonly status: number,
     message: string
   ) {
     super(message);

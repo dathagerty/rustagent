@@ -5,7 +5,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { decisionsToElements, filterNowMode, decisionStylesheet } from './decision-graph';
-import type { GraphNode, GraphEdge } from '../types';
+import type { GraphNode, GraphEdge, NodeType, NodeStatus, EdgeType } from '../types';
 
 /**
  * Create a test GraphNode.
@@ -19,10 +19,10 @@ function createNode(
   return {
     id,
     project_id: 'proj-1',
-    node_type: nodeType as any,
+    node_type: nodeType as NodeType,
     title,
     description: 'Test description',
-    status: status as any,
+    status: status as NodeStatus,
     priority: 'medium',
     assigned_to: null,
     created_by: null,
@@ -47,7 +47,7 @@ function createEdge(
 ): GraphEdge {
   return {
     id,
-    edge_type: edgeType as any,
+    edge_type: edgeType as EdgeType,
     from_node: fromNode,
     to_node: toNode,
     label,
