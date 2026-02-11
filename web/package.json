@@ -13,9 +13,14 @@
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^3",
     "@tsconfig/svelte": "^5",
+    "@types/cytoscape": "^3.31.0",
+    "cytoscape-dagre": "^2.5.0",
     "svelte": "^5",
     "typescript": "^5",
     "vite": "^6",
     "vitest": "^2"
+  },
+  "dependencies": {
+    "cytoscape": "^3.33.1"
   }
 }
