@@ -105,12 +105,19 @@ function buildTreeNode(node: GraphNode, allNodes: Array<GraphNode>, allEdges: Ar
   // Sort children by ID (natural sort).
   childNodes.sort((a, b) => naturalSortNodeIds(a.id, b.id));
 
-  // Find dependencies (nodes connected via incoming "dependson" edges).
+  // Find dependencies (nodes connected via outgoing "dependson" edges TO this node).
+  // Note: dependson edge is from_node (depends on) to to_node (is depended on).
+  // So we want edges where to_node === current node, to find what depends on us.
+  // But the task description says "dependencies: nodes this one depends on",
+  // which means edges where from_node === current node.
   const dependencyIds = allEdges
-    .filter((e) => e.edge_type === 'dependson' && e.to_node === node.id)
-    .map((e) => e.from_node);
+    .filter((e) => e.edge_type === 'dependson' && e.from_node === node.id)
+    .map((e) => e.to_node);
 
   const dependencies = allNodes.filter((n) => dependencyIds.includes(n.id));
+
+  // Sort dependencies by ID for consistency
+  dependencies.sort((a, b) => naturalSortNodeIds(a.id, b.id));
 
   // Recursively build children.
   const children = childNodes.map((childNode) => buildTreeNode(childNode, allNodes, allEdges));
