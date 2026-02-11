@@ -11,6 +11,7 @@
   import { handleWsEvent as handleAgentsWsEvent } from './stores/agents.svelte';
   import type { WsEvent } from './types';
   import Sidebar from './components/Sidebar.svelte';
+  import Dashboard from './views/Dashboard.svelte';
   import Placeholder from './views/Placeholder.svelte';
 
   let wsConnection: ReturnType<typeof createWsConnection> | null = null;
@@ -48,7 +49,7 @@
 
   <main class="main-content">
     {#if currentRoute.name === 'dashboard'}
-      <Placeholder name="Dashboard" />
+      <Dashboard />
     {:else if currentRoute.name === 'project-list'}
       <Placeholder name="Project List" />
     {:else if currentRoute.name === 'project-detail'}
