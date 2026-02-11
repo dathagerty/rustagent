@@ -63,7 +63,7 @@ export type GraphNode = {
   priority: Priority | null;
   assigned_to: string | null;
   created_by: string | null;
-  labels: string[];
+  labels: Array<string>;
   created_at: string;
   started_at: string | null;
   completed_at: string | null;
@@ -298,7 +298,7 @@ export type WsEvent =
       priority: Priority | null;
       assigned_to: string | null;
       created_by: string | null;
-      labels: string[];
+      labels: Array<string>;
       created_at: string;
       started_at: string | null;
       completed_at: string | null;

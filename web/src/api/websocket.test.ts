@@ -303,7 +303,7 @@ describe('WsConnection', () => {
     conn.connect();
     MockWebSocket.lastInstance?.simulateOpen();
 
-    const events: WsEvent[] = [
+    const events: Array<WsEvent> = [
       {
         type: 'agent_spawned',
         agent_id: 'agent-1',
