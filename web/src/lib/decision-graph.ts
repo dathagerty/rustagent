@@ -55,14 +55,6 @@ export function filterNowMode(
   nodes: Array<GraphNode>,
   edges: Array<GraphEdge>,
 ): { nodes: Array<GraphNode>; edges: Array<GraphEdge> } {
-  // Determine which nodes to include
-  const nowModeStatuses: Set<NodeStatus> = new Set([
-    'active',
-    'decided',
-    'chosen',
-    'completed',
-  ]);
-
   const filteredNodes = nodes.filter((node) => {
     const isDecision = node.node_type === 'decision';
     const isOption = node.node_type === 'option';
@@ -104,7 +96,7 @@ export function filterNowMode(
  * Generate the Cytoscape stylesheet for decision graph visualization.
  * Styles nodes by type and status, edges by type and relationship.
  */
-export function decisionStylesheet(): cytoscape.StylesheetJson {
+export function decisionStylesheet(): Array<cytoscape.StylesheetStyle> {
   return [
     // Base node styling
     {
@@ -229,6 +221,7 @@ export function decisionStylesheet(): cytoscape.StylesheetJson {
         'font-size': 11,
         'text-background-color': '#fff',
         'text-background-padding': '3px',
+        'text-background-opacity': 1,
       },
     },
 

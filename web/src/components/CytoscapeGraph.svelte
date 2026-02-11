@@ -31,6 +31,7 @@
 
   let containerDiv: HTMLDivElement | undefined = $state();
   let cyInstance: cytoscape.Core | null = $state(null);
+  let initialized = $state(false);
 
   onMount(() => {
     if (!containerDiv) return;
@@ -58,6 +59,8 @@
       }
     });
 
+    initialized = true;
+
     // Return cleanup function
     return () => {
       if (cyInstance) {
@@ -69,7 +72,7 @@
 
   // Reactive updates when elements change
   $effect(() => {
-    if (!cyInstance) return;
+    if (!cyInstance || !initialized) return;
 
     cyInstance.batch(() => {
       cyInstance!.elements().remove();

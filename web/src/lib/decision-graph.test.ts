@@ -280,7 +280,9 @@ describe('decision-graph transformations', () => {
         (rule) => typeof rule.selector === 'string' && rule.selector.includes('decision')
       );
       expect(decisionRule).toBeDefined();
-      expect((decisionRule?.style as any)['shape']).toBe('diamond');
+      if (decisionRule && 'style' in decisionRule && decisionRule.style) {
+        expect((decisionRule.style as Record<string, unknown>)['shape']).toBe('diamond');
+      }
     });
 
     it('should include option node styling', () => {
@@ -290,7 +292,9 @@ describe('decision-graph transformations', () => {
         (rule) => typeof rule.selector === 'string' && rule.selector.includes('option')
       );
       expect(optionRule).toBeDefined();
-      expect((optionRule?.style as any)['shape']).toBe('hexagon');
+      if (optionRule && 'style' in optionRule && optionRule.style) {
+        expect((optionRule.style as Record<string, unknown>)['shape']).toBe('hexagon');
+      }
     });
 
     it('should include outcome node styling', () => {
@@ -300,7 +304,9 @@ describe('decision-graph transformations', () => {
         (rule) => typeof rule.selector === 'string' && rule.selector.includes('outcome')
       );
       expect(outcomeRule).toBeDefined();
-      expect((outcomeRule?.style as any)['shape']).toBe('ellipse');
+      if (outcomeRule && 'style' in outcomeRule && outcomeRule.style) {
+        expect((outcomeRule.style as Record<string, unknown>)['shape']).toBe('ellipse');
+      }
     });
 
     it('should include revisit node styling', () => {
@@ -310,7 +316,9 @@ describe('decision-graph transformations', () => {
         (rule) => typeof rule.selector === 'string' && rule.selector.includes('revisit')
       );
       expect(revisitRule).toBeDefined();
-      expect((revisitRule?.style as any)['shape']).toBe('triangle');
+      if (revisitRule && 'style' in revisitRule && revisitRule.style) {
+        expect((revisitRule.style as Record<string, unknown>)['shape']).toBe('triangle');
+      }
     });
 
     it('should style chosen options as green', () => {
@@ -323,7 +331,9 @@ describe('decision-graph transformations', () => {
           rule.selector.includes('chosen')
       );
       expect(chosenRule).toBeDefined();
-      expect((chosenRule?.style as any)['background-color']).toBe('#32CD32');
+      if (chosenRule && 'style' in chosenRule && chosenRule.style) {
+        expect((chosenRule.style as Record<string, unknown>)['background-color']).toBe('#32CD32');
+      }
     });
 
     it('should style rejected options as gray with dashed border', () => {
@@ -336,8 +346,10 @@ describe('decision-graph transformations', () => {
           rule.selector.includes('rejected')
       );
       expect(rejectedRule).toBeDefined();
-      expect((rejectedRule?.style as any)['background-color']).toBe('#666');
-      expect((rejectedRule?.style as any)['border-style']).toBe('dashed');
+      if (rejectedRule && 'style' in rejectedRule && rejectedRule.style) {
+        expect((rejectedRule.style as Record<string, unknown>)['background-color']).toBe('#666');
+        expect((rejectedRule.style as Record<string, unknown>)['border-style']).toBe('dashed');
+      }
     });
 
     it('should style decision nodes as gold', () => {
@@ -347,7 +359,9 @@ describe('decision-graph transformations', () => {
         (rule) => typeof rule.selector === 'string' && rule.selector === 'node[type = "decision"]'
       );
       expect(decisionRule).toBeDefined();
-      expect((decisionRule?.style as any)['background-color']).toBe('#FFD700');
+      if (decisionRule && 'style' in decisionRule && decisionRule.style) {
+        expect((decisionRule.style as Record<string, unknown>)['background-color']).toBe('#FFD700');
+      }
     });
 
     it('should style chosen edges as green and thick', () => {
@@ -360,8 +374,10 @@ describe('decision-graph transformations', () => {
           rule.selector.includes('chosen')
       );
       expect(chosenEdgeRule).toBeDefined();
-      expect((chosenEdgeRule?.style as any)['line-color']).toBe('#32CD32');
-      expect((chosenEdgeRule?.style as any)['width']).toBe(3);
+      if (chosenEdgeRule && 'style' in chosenEdgeRule && chosenEdgeRule.style) {
+        expect((chosenEdgeRule.style as Record<string, unknown>)['line-color']).toBe('#32CD32');
+        expect((chosenEdgeRule.style as Record<string, unknown>)['width']).toBe(3);
+      }
     });
 
     it('should style rejected edges as dashed gray', () => {
@@ -374,7 +390,9 @@ describe('decision-graph transformations', () => {
           rule.selector.includes('rejected')
       );
       expect(rejectedEdgeRule).toBeDefined();
-      expect((rejectedEdgeRule?.style as any)['line-style']).toBe('dashed');
+      if (rejectedEdgeRule && 'style' in rejectedEdgeRule && rejectedEdgeRule.style) {
+        expect((rejectedEdgeRule.style as Record<string, unknown>)['line-style']).toBe('dashed');
+      }
     });
   });
 

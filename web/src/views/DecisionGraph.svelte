@@ -18,6 +18,7 @@
   import { apiClient } from '../api';
   import { decisionsToElements, filterNowMode, decisionStylesheet } from '../lib/decision-graph';
   import type { GraphNode, GraphEdge } from '../types';
+  import type { ElementDefinition } from 'cytoscape';
   import CytoscapeGraph from '../components/CytoscapeGraph.svelte';
   import GraphNodeCard from '../components/GraphNodeCard.svelte';
   import LoadingSpinner from '../components/LoadingSpinner.svelte';
@@ -82,7 +83,7 @@
   /**
    * Compute elements and styling based on current mode.
    */
-  function getDisplayData(): Array<Record<string, unknown>> {
+  function getDisplayData(): Array<ElementDefinition> {
     if (mode === 'now' && graphState.decisions.length > 0) {
       // For Now mode, need to load goal tree to get options/outcomes
       // Use decisions + goalTree edges
@@ -100,7 +101,7 @@
 
   const displayData = $derived(getDisplayData());
   const nodeCount = $derived(
-    displayData.filter((el) => el.data && (el.data as Record<string, unknown>).id && !(el.data as Record<string, unknown>).source).length
+    displayData.filter((el) => el.data && el.data.id && !el.data.source).length
   );
   const stylesheet = $derived(decisionStylesheet());
 </script>
