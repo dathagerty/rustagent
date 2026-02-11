@@ -12,6 +12,7 @@
   import type { WsEvent } from './types';
   import Sidebar from './components/Sidebar.svelte';
   import Dashboard from './views/Dashboard.svelte';
+  import ProjectList from './views/ProjectList.svelte';
   import Placeholder from './views/Placeholder.svelte';
 
   let wsConnection: ReturnType<typeof createWsConnection> | null = null;
@@ -51,7 +52,7 @@
     {#if currentRoute.name === 'dashboard'}
       <Dashboard />
     {:else if currentRoute.name === 'project-list'}
-      <Placeholder name="Project List" />
+      <ProjectList />
     {:else if currentRoute.name === 'project-detail'}
       <Placeholder name="Project Detail" />
     {:else if currentRoute.name === 'task-tree'}
