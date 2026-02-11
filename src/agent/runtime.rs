@@ -1,12 +1,13 @@
-use crate::agent::{AgentContext, AgentOutcome, AgentProfile};
+use crate::agent::{AgentContext, AgentId, AgentOutcome, AgentProfile};
 use crate::context::ContextBuilder;
 use crate::llm::{LlmClient, Message, ResponseContent};
+use crate::message::{MessageBus, WorkerMessage};
 use crate::tools::ToolRegistry;
 use anyhow::Result;
 use std::sync::Arc;
 
 /// Configuration for the AgentRuntime
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct RuntimeConfig {
     /// Maximum number of turns to run (default: 100)
     pub max_turns: usize,
@@ -18,6 +19,27 @@ pub struct RuntimeConfig {
     pub token_budget: usize,
     /// Warning threshold as percentage of budget (default: 80)
     pub token_budget_warning_pct: u8,
+    /// Optional message bus for check-in reports (None for single-agent mode)
+    pub message_bus: Option<Arc<dyn MessageBus>>,
+    /// Agent ID for check-in reports (None for single-agent mode)
+    pub agent_id: Option<AgentId>,
+    /// Check-in interval in turns (default: 10)
+    pub check_in_interval: usize,
+}
+
+impl std::fmt::Debug for RuntimeConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RuntimeConfig")
+            .field("max_turns", &self.max_turns)
+            .field("max_consecutive_llm_failures", &self.max_consecutive_llm_failures)
+            .field("max_consecutive_tool_failures", &self.max_consecutive_tool_failures)
+            .field("token_budget", &self.token_budget)
+            .field("token_budget_warning_pct", &self.token_budget_warning_pct)
+            .field("message_bus", &self.message_bus.is_some())
+            .field("agent_id", &self.agent_id)
+            .field("check_in_interval", &self.check_in_interval)
+            .finish()
+    }
 }
 
 impl Default for RuntimeConfig {
@@ -28,6 +50,9 @@ impl Default for RuntimeConfig {
             max_consecutive_tool_failures: 3,
             token_budget: 200_000,
             token_budget_warning_pct: 80,
+            message_bus: None,
+            agent_id: None,
+            check_in_interval: 10,
         }
     }
 }
@@ -36,7 +61,7 @@ impl Default for RuntimeConfig {
 pub struct AgentRuntime {
     client: Arc<dyn LlmClient>,
     tools: ToolRegistry,
-    #[allow(dead_code)] // Stored for multi-agent orchestration in later phases
+    #[allow(dead_code)]
     profile: AgentProfile,
     config: RuntimeConfig,
 }
@@ -72,9 +97,27 @@ impl AgentRuntime {
             if turn >= self.config.max_turns {
                 return Ok(AgentOutcome::Completed {
                     summary: format!("Turn limit reached after {} turns", self.config.max_turns),
+                    tokens_used: cumulative_tokens,
                 });
             }
             turn += 1;
+
+            // Send check-in progress report if configured
+            if let (Some(bus), Some(id)) = (&self.config.message_bus, &self.config.agent_id)
+                && turn > 1
+                && (turn - 1) % self.config.check_in_interval == 0
+            {
+                let _ = bus
+                    .send(
+                        &"orchestrator".to_string(),
+                        WorkerMessage::ProgressReport {
+                            agent_id: id.clone(),
+                            turn: turn - 1,
+                            summary: format!("Turn {}: processing", turn - 1),
+                        },
+                    )
+                    .await;
+            }
 
             // Check token budget warning threshold
             let token_warning_threshold =
@@ -150,6 +193,7 @@ impl AgentRuntime {
                                                 .to_string();
                                             return Ok(AgentOutcome::Completed {
                                                 summary: message,
+                                                tokens_used: cumulative_tokens,
                                             });
                                         } else if output.contains("SIGNAL:blocked") {
                                             let reason = output

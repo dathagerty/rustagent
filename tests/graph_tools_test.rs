@@ -662,7 +662,7 @@ fn test_v2_registry_includes_all_tools() {
     let permission_handler = Arc::new(AutoApproveHandler);
 
     // Create the v2 registry
-    let registry = create_v2_registry(validator, permission_handler, graph_store);
+    let registry = create_v2_registry(validator, permission_handler, graph_store, None, None);
 
     // Expected tool names: graph tools + legacy tools + context tools
     let expected_tools = vec![

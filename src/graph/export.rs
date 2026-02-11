@@ -1,11 +1,11 @@
-use crate::graph::store::{GraphStore, NodeQuery, SqliteGraphStore};
+use crate::graph::store::{GraphStore, NodeQuery};
 use anyhow::Result;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 /// Export all decisions from a project as ADR markdown files
 pub async fn export_adrs(
-    graph_store: &SqliteGraphStore,
+    graph_store: &dyn GraphStore,
     project_id: &str,
     output_dir: &Path,
 ) -> Result<Vec<PathBuf>> {
@@ -49,7 +49,7 @@ pub async fn export_adrs(
 
 /// Generate ADR markdown for a decision node
 async fn generate_adr_markdown(
-    graph_store: &SqliteGraphStore,
+    graph_store: &dyn GraphStore,
     decision: &crate::graph::GraphNode,
     number: &str,
 ) -> Result<String> {

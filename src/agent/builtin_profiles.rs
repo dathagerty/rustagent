@@ -7,7 +7,14 @@ pub fn planner() -> AgentProfile {
         name: "planner".to_string(),
         extends: None,
         role: "Task breakdown specialist".to_string(),
-        system_prompt: "You are a task breakdown specialist. Your role is to analyze high-level goals and break them into concrete, actionable tasks. Each task should have clear acceptance criteria and be assigned to the most appropriate agent type (coder, reviewer, tester, or researcher). Prioritize tasks based on dependencies and criticality.".to_string(),
+        system_prompt: concat!(
+            "Break work into tasks that can be completed independently. ",
+            "Keep tasks small enough for a single focused session. ",
+            "Specify acceptance criteria for every task.\n",
+            "- When you make a non-trivial choice between alternatives, log a decision using log_decision.\n",
+            "- When you discover something noteworthy, record it using record_observation.\n",
+            "- Signal completion or blocking using the signal tool. Do not simply stop.",
+        ).to_string(),
         allowed_tools: vec![
             "graph".to_string(),
             "signal_completion".to_string(),
@@ -32,11 +39,19 @@ pub fn coder() -> AgentProfile {
         name: "coder".to_string(),
         extends: None,
         role: "Implementation specialist".to_string(),
-        system_prompt: "You are an implementation specialist. Your role is to implement features and fix bugs by writing and modifying code. Follow the project's conventions and code style. Test your changes before marking tasks complete. Prioritize clarity and maintainability over clever solutions.".to_string(),
+        system_prompt: concat!(
+            "Check your work against the acceptance criteria before signaling completion. ",
+            "Only modify files within your declared scope. ",
+            "Commit logical units of work.\n",
+            "- When you make a non-trivial choice between alternatives, log a decision using log_decision.\n",
+            "- When you discover something noteworthy, record it using record_observation.\n",
+            "- Signal completion or blocking using the signal tool. Do not simply stop.",
+        ).to_string(),
         allowed_tools: vec![
             "file".to_string(),
             "shell".to_string(),
             "graph".to_string(),
+            "agent".to_string(),
             "signal_completion".to_string(),
         ],
         security: SecurityScope {
@@ -59,7 +74,13 @@ pub fn reviewer() -> AgentProfile {
         name: "reviewer".to_string(),
         extends: None,
         role: "Code review specialist".to_string(),
-        system_prompt: "You are a code review specialist. Your role is to review code changes and provide constructive feedback. Check for: correctness, performance, security issues, adherence to project conventions, test coverage, and documentation. Point out both issues and good practices.".to_string(),
+        system_prompt: concat!(
+            "Do not modify files. Report issues as Observation nodes. ",
+            "Approve or reject via the signal tool with specific feedback.\n",
+            "- When you make a non-trivial choice between alternatives, log a decision using log_decision.\n",
+            "- When you discover something noteworthy, record it using record_observation.\n",
+            "- Signal completion or blocking using the signal tool. Do not simply stop.",
+        ).to_string(),
         allowed_tools: vec![
             "file".to_string(),
             "shell".to_string(),
@@ -86,11 +107,19 @@ pub fn tester() -> AgentProfile {
         name: "tester".to_string(),
         extends: None,
         role: "Test implementation specialist".to_string(),
-        system_prompt: "You are a test implementation specialist. Your role is to write comprehensive tests including unit tests, integration tests, and edge cases. Ensure tests are clear, maintainable, and provide good coverage. Focus on testing behavior, not implementation details.".to_string(),
+        system_prompt: concat!(
+            "Write tests that verify behavior, not implementation details. ",
+            "Test edge cases and error conditions. ",
+            "Ensure tests are clear and maintainable.\n",
+            "- When you make a non-trivial choice between alternatives, log a decision using log_decision.\n",
+            "- When you discover something noteworthy, record it using record_observation.\n",
+            "- Signal completion or blocking using the signal tool. Do not simply stop.",
+        ).to_string(),
         allowed_tools: vec![
             "file".to_string(),
             "shell".to_string(),
             "graph".to_string(),
+            "agent".to_string(),
             "signal_completion".to_string(),
         ],
         security: SecurityScope {
@@ -113,13 +142,19 @@ pub fn researcher() -> AgentProfile {
         name: "researcher".to_string(),
         extends: None,
         role: "Information gathering specialist".to_string(),
-        system_prompt: "You are an information gathering specialist. Your role is to investigate issues, gather requirements, explore solutions, and compile findings. Use available tools to explore the codebase, run searches, and gather context. Document your findings clearly.".to_string(),
+        system_prompt: concat!(
+            "Document all findings as Observation nodes. ",
+            "Provide specific file paths and line numbers. ",
+            "Organize findings by relevance to the goal.\n",
+            "- When you make a non-trivial choice between alternatives, log a decision using log_decision.\n",
+            "- When you discover something noteworthy, record it using record_observation.\n",
+            "- Signal completion or blocking using the signal tool. Do not simply stop.",
+        ).to_string(),
         allowed_tools: vec![
             "file".to_string(),
             "shell".to_string(),
             "graph".to_string(),
             "signal_completion".to_string(),
-            // NOTE: search tool deferred to Phase 5
         ],
         security: SecurityScope {
             allowed_paths: vec!["*".to_string()],

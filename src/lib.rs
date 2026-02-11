@@ -1,10 +1,12 @@
 pub mod agent;
 pub mod config;
 pub mod context;
+pub mod daemon;
 pub mod db;
 pub mod graph;
 pub mod llm;
 pub mod logging;
+pub mod message;
 pub mod planning;
 pub mod project;
 pub mod ralph;

@@ -72,7 +72,7 @@ async fn test_p1d_ac4_1_simple_completion() {
     let outcome = runtime.run(ctx).await.expect("Runtime failed");
 
     match outcome {
-        AgentOutcome::Completed { summary } => {
+        AgentOutcome::Completed { summary, .. } => {
             assert!(summary.contains("Task completed successfully"));
         }
         _ => panic!("Expected Completed outcome, got {:?}", outcome),
@@ -316,7 +316,7 @@ async fn test_p1d_ac4_5_turn_limit() {
     let outcome = runtime.run(ctx).await.expect("Runtime failed");
 
     match outcome {
-        AgentOutcome::Completed { summary } => {
+        AgentOutcome::Completed { summary, .. } => {
             assert!(summary.contains("turn") || summary.contains("limit"));
         }
         _ => panic!(

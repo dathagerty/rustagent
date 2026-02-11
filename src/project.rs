@@ -150,6 +150,47 @@ impl ProjectStore {
         result.map_err(|e| anyhow::anyhow!(e))
     }
 
+    /// Get a project by ID
+    pub async fn get_by_id(&self, id: &str) -> Result<Option<Project>> {
+        let db = self.db.clone();
+        let id = id.to_string();
+
+        let result = db
+            .connection()
+            .call(move |conn| {
+                let mut stmt = conn.prepare(
+                    "SELECT id, name, path, registered_at, config_overrides, metadata
+                     FROM projects
+                     WHERE id = ?",
+                )?;
+
+                let project = stmt.query_row([&id], |row| {
+                    let registered_at_str: String = row.get(3)?;
+                    let registered_at = DateTime::parse_from_rfc3339(&registered_at_str)
+                        .map(|dt| dt.with_timezone(&Utc))
+                        .unwrap_or_else(|_| Utc::now());
+
+                    Ok(Project {
+                        id: row.get(0)?,
+                        name: row.get(1)?,
+                        path: PathBuf::from(row.get::<_, String>(2)?),
+                        registered_at,
+                        config_overrides: row.get(4)?,
+                        metadata: row.get(5)?,
+                    })
+                });
+
+                match project {
+                    Ok(p) => Ok(Some(p)),
+                    Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+                    Err(e) => Err(tokio_rusqlite::Error::Rusqlite(e)),
+                }
+            })
+            .await;
+
+        result.map_err(|e| anyhow::anyhow!(e))
+    }
+
     /// Get a project by path (canonicalized comparison)
     pub async fn get_by_path(&self, path: &Path) -> Result<Option<Project>> {
         let db = self.db.clone();

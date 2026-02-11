@@ -27,6 +27,7 @@ impl Agent for MockAgent {
     async fn run(&self, _ctx: AgentContext) -> anyhow::Result<AgentOutcome> {
         Ok(AgentOutcome::Completed {
             summary: "mock completed".to_string(),
+            tokens_used: 0,
         })
     }
 
@@ -89,10 +90,11 @@ fn test_agent_outcome_completed() {
     // P1d.AC2.3: Verify Completed variant
     let outcome = AgentOutcome::Completed {
         summary: "task completed".to_string(),
+        tokens_used: 0,
     };
 
     match outcome {
-        AgentOutcome::Completed { summary } => {
+        AgentOutcome::Completed { summary, .. } => {
             assert_eq!(summary, "task completed");
         }
         _ => panic!("Expected Completed variant"),
@@ -183,7 +185,7 @@ async fn test_mock_agent_run() {
     assert!(result.is_ok());
 
     match result.unwrap() {
-        AgentOutcome::Completed { summary } => {
+        AgentOutcome::Completed { summary, .. } => {
             assert_eq!(summary, "mock completed");
         }
         _ => panic!("Expected Completed outcome"),

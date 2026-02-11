@@ -34,12 +34,18 @@ enum Commands {
     Run {
         /// Goal description
         goal: String,
-        /// Agent profile to use
+        /// Agent profile to use (default worker profile)
         #[arg(long, default_value = "coder")]
         profile: String,
-        /// Maximum iterations
+        /// Maximum number of concurrent workers (1 = single-agent mode)
+        #[arg(long, default_value = "4")]
+        workers: usize,
+        /// Require code review after each worker completes
         #[arg(long)]
-        max_iterations: Option<usize>,
+        review: bool,
+        /// Maximum token budget per goal
+        #[arg(long)]
+        max_tokens: Option<usize>,
     },
     /// Manage projects
     Project {
@@ -72,6 +78,11 @@ enum Commands {
     Graph {
         #[command(subcommand)]
         action: GraphAction,
+    },
+    /// Manage the daemon process
+    Daemon {
+        #[command(subcommand)]
+        action: DaemonAction,
     },
 }
 
@@ -179,6 +190,32 @@ enum GraphAction {
     },
 }
 
+#[derive(Subcommand)]
+enum DaemonAction {
+    /// Start the daemon (foreground)
+    Start {
+        /// Bind address (default: 127.0.0.1)
+        #[arg(long, default_value = "127.0.0.1")]
+        bind: String,
+        /// Port (default: 7400)
+        #[arg(long, default_value = "7400")]
+        port: u16,
+    },
+    /// Stop a running daemon
+    Stop,
+    /// Check if the daemon is running
+    Status,
+    /// Tail daemon logs
+    Logs {
+        /// Number of lines to show (default: 50)
+        #[arg(long, short = 'n', default_value = "50")]
+        lines: usize,
+        /// Follow log output (like tail -f)
+        #[arg(long, short = 'f')]
+        follow: bool,
+    },
+}
+
 /// Find config file in standard locations
 fn find_config_path() -> anyhow::Result<PathBuf> {
     // Try current directory
@@ -234,6 +271,87 @@ async fn resolve_project(
     }
 }
 
+fn display_task_list(tasks: &[rustagent::graph::GraphNode]) {
+    if tasks.is_empty() {
+        println!("No tasks found");
+    } else {
+        println!("{:<20} {:<15} {:<30}", "ID", "Status", "Title");
+        println!("{}", "=".repeat(65));
+        for task in tasks {
+            println!("{:<20} {:<15} {:<30}", task.id, task.status, task.title);
+        }
+    }
+}
+
+fn display_task_summary(tasks: &[rustagent::graph::GraphNode]) {
+    let total = tasks.len();
+    let completed = tasks
+        .iter()
+        .filter(|t| t.status == rustagent::graph::NodeStatus::Completed)
+        .count();
+    let in_progress = tasks
+        .iter()
+        .filter(|t| t.status == rustagent::graph::NodeStatus::InProgress)
+        .count();
+    let ready = tasks
+        .iter()
+        .filter(|t| t.status == rustagent::graph::NodeStatus::Ready)
+        .count();
+    let blocked = tasks
+        .iter()
+        .filter(|t| t.status == rustagent::graph::NodeStatus::Blocked)
+        .count();
+    let failed = tasks
+        .iter()
+        .filter(|t| t.status == rustagent::graph::NodeStatus::Failed)
+        .count();
+
+    println!("\nTask Progress:");
+    println!("  Completed: {}/{}", completed, total);
+    if in_progress > 0 {
+        println!("  In Progress: {}", in_progress);
+    }
+    if ready > 0 {
+        println!("  Ready: {}", ready);
+    }
+    if blocked > 0 {
+        println!("  Blocked: {}", blocked);
+    }
+    if failed > 0 {
+        println!("  Failed: {}", failed);
+    }
+}
+
+fn display_search_results(query: &str, results: &[rustagent::graph::GraphNode]) {
+    if results.is_empty() {
+        println!("No results found for '{}'", query);
+    } else {
+        println!("Search results for '{}':", query);
+        println!("{:<20} {:<15} {:<30}", "ID", "Type", "Title");
+        println!("{}", "=".repeat(65));
+        for node in results {
+            println!("{:<20} {:<15} {:<30}", node.id, node.node_type, node.title);
+        }
+    }
+}
+
+fn display_project_list(projects: &[rustagent::daemon::api::projects::ProjectResponse]) {
+    if projects.is_empty() {
+        println!("No projects registered");
+    } else {
+        println!("{:<20} {:<10} {:<40}", "Name", "ID", "Path");
+        println!("{}", "=".repeat(70));
+        for proj in projects {
+            let path_display = if proj.path.len() > 40 {
+                format!("{}...", &proj.path[..37])
+            } else {
+                proj.path.clone()
+            };
+            println!("{:<20} {:<10} {:<40}", proj.name, proj.id, path_display);
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let _log_guard = logging::init_logging()?;
@@ -245,6 +363,10 @@ async fn main() -> anyhow::Result<()> {
         Cli::command().print_help()?;
         return Ok(());
     };
+
+    // Auto-detect daemon for commands that support routing through it
+    let daemon_config = rustagent::daemon::DaemonConfig::default();
+    let daemon_client = rustagent::daemon::client::detect_daemon(&daemon_config).await;
 
     match command {
         Commands::Init { spec_dir } => {
@@ -290,8 +412,10 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Run {
             goal,
-            profile,
-            max_iterations,
+            profile: _profile,
+            workers,
+            review,
+            max_tokens,
         } => {
             // Load config from standard locations
             let config_path = find_config_path()?;
@@ -307,160 +431,104 @@ async fn main() -> anyhow::Result<()> {
                 anyhow::anyhow!("No project specified or found in current directory")
             })?;
 
-            // Create goal node in graph
-            let graph_store = std::sync::Arc::new(rustagent::graph::store::SqliteGraphStore::new(
-                database.clone(),
-            ));
-
-            let goal_id = rustagent::graph::generate_goal_id();
-            let goal_node = rustagent::graph::GraphNode {
-                id: goal_id.clone(),
-                project_id: project.id.clone(),
-                node_type: rustagent::graph::NodeType::Goal,
-                title: goal.clone(),
-                description: goal.clone(),
-                status: rustagent::graph::NodeStatus::Active,
-                priority: None,
-                assigned_to: None,
-                created_by: None,
-                labels: vec!["agent_run".to_string()],
-                created_at: chrono::Utc::now(),
-                started_at: Some(chrono::Utc::now()),
-                completed_at: None,
-                blocked_reason: None,
-                metadata: std::collections::HashMap::new(),
-            };
-
-            graph_store.create_node(&goal_node).await?;
-            println!("Created goal: {} ({})", goal, goal_id);
-
-            // Create session
-            let session_store = rustagent::graph::session::SessionStore::new(database.clone());
-            let session = session_store.create_session(&project.id, &goal_id).await?;
-            println!("Started session: {}", session.id);
-
-            // Resolve profile
-            let resolved_profile =
-                rustagent::agent::profile::resolve_profile(&profile, Some(&project.path))?;
-
-            // Build AgentContext
-            let agents_md_summaries =
-                rustagent::context::resolve_agents_md(&project.path, &[]).unwrap_or_default();
-
-            let ctx = rustagent::agent::AgentContext {
-                work_package_tasks: vec![goal_node],
-                relevant_decisions: vec![],
-                handoff_notes: session.handoff_notes.clone(),
-                agents_md_summaries,
-                profile: resolved_profile.clone(),
-                project_path: project.path.clone(),
-                graph_store: graph_store.clone(),
-            };
-
-            // Create LLM client
+            // Create shared dependencies
+            let graph_store: std::sync::Arc<dyn GraphStore> =
+                std::sync::Arc::new(rustagent::graph::store::SqliteGraphStore::new(
+                    database.clone(),
+                ));
             let llm_client = rustagent::llm::factory::create_client(&config, &config.llm)?;
-
-            // Create tool registry
             let security_validator = std::sync::Arc::new(
                 rustagent::security::SecurityValidator::new(config.security.clone())?,
             );
-            let permission_handler =
-                std::sync::Arc::new(rustagent::security::permission::CliPermissionHandler {});
+            let permission_handler: std::sync::Arc<
+                dyn rustagent::security::permission::PermissionHandler,
+            > = std::sync::Arc::new(rustagent::security::permission::CliPermissionHandler {});
+            let message_bus: std::sync::Arc<dyn rustagent::message::MessageBus> =
+                std::sync::Arc::new(rustagent::message::TokioMessageBus::default());
 
-            let tool_registry = rustagent::tools::factory::create_v2_registry(
-                security_validator,
-                permission_handler,
-                graph_store.clone(),
-            );
-
-            // Create AgentRuntime
-            let runtime_config = rustagent::agent::runtime::RuntimeConfig {
-                max_turns: max_iterations.unwrap_or(100),
-                max_consecutive_llm_failures: 3,
-                max_consecutive_tool_failures: 3,
-                token_budget: resolved_profile.token_budget.unwrap_or(200_000),
-                token_budget_warning_pct: 80,
+            // Build orchestrator config from CLI flags
+            let orch_config = rustagent::agent::orchestrator::OrchestratorConfig {
+                max_concurrent_workers: workers,
+                review_required: review,
+                max_tokens_per_goal: max_tokens,
+                ..rustagent::agent::orchestrator::OrchestratorConfig::default()
             };
 
-            let runtime = rustagent::agent::runtime::AgentRuntime::new(
+            let mut orchestrator = rustagent::agent::orchestrator::Orchestrator::new(
+                orch_config,
+                graph_store,
+                message_bus,
                 llm_client,
-                tool_registry,
-                resolved_profile.clone(),
-                runtime_config,
+                security_validator,
+                permission_handler,
+                project.path.clone(),
+                project.id.clone(),
             );
 
-            // Run the runtime
-            println!("Running agent with profile: {}", profile);
-            let outcome = runtime.run(ctx).await?;
+            // Set up Ctrl+C graceful shutdown
+            let shutdown_token = tokio_util::sync::CancellationToken::new();
+            let shutdown_clone = shutdown_token.clone();
+            tokio::spawn(async move {
+                tokio::signal::ctrl_c().await.ok();
+                println!("\nGraceful shutdown initiated...");
+                shutdown_clone.cancel();
+            });
 
-            // Handle outcome
-            match outcome {
-                rustagent::agent::AgentOutcome::Completed { summary } => {
-                    println!("Agent completed: {}", summary);
-                    graph_store
-                        .update_node(
-                            &goal_id,
-                            Some(rustagent::graph::NodeStatus::Completed),
-                            None,
-                            None,
-                            None,
-                            None,
-                        )
-                        .await?;
-                }
-                rustagent::agent::AgentOutcome::Blocked { reason } => {
-                    println!("Agent blocked: {}", reason);
-                    graph_store
-                        .update_node(
-                            &goal_id,
-                            Some(rustagent::graph::NodeStatus::Blocked),
-                            None,
-                            None,
-                            Some(&reason),
-                            None,
-                        )
-                        .await?;
-                }
-                rustagent::agent::AgentOutcome::Failed { error } => {
-                    println!("Agent failed: {}", error);
-                    graph_store
-                        .update_node(
-                            &goal_id,
-                            Some(rustagent::graph::NodeStatus::Failed),
-                            None,
-                            None,
-                            Some(&error),
-                            None,
-                        )
-                        .await?;
-                }
-                rustagent::agent::AgentOutcome::TokenBudgetExhausted {
-                    summary,
-                    tokens_used,
-                } => {
-                    println!("Token budget exhausted ({}): {}", tokens_used, summary);
-                    graph_store
-                        .update_node(
-                            &goal_id,
-                            Some(rustagent::graph::NodeStatus::Completed),
-                            None,
-                            None,
-                            Some(&format!(
-                                "Token budget exhausted after {} tokens",
-                                tokens_used
-                            )),
-                            None,
-                        )
-                        .await?;
-                }
+            println!(
+                "Running orchestrator (workers: {}, review: {})",
+                workers, review
+            );
+
+            let result = orchestrator
+                .run_with_shutdown(&goal, shutdown_token)
+                .await?;
+
+            // Print results
+            println!("\n{}", result.summary);
+            if let Some(session_id) = &result.session_id {
+                println!("Session: {}", session_id);
             }
-
-            // End session
-            session_store.end_session(&session.id, &graph_store).await?;
-            println!("Session ended");
         }
         Commands::Project { action } => {
-            // Open database
+            if let Some(ref client) = daemon_client {
+                match action {
+                    ProjectAction::Add { name, path } => {
+                        let path_obj = std::path::Path::new(&path);
+                        let canonical = path_obj.canonicalize()?;
+                        let proj = client
+                            .project_add(&name, &canonical.to_string_lossy())
+                            .await?;
+                        println!(
+                            "Registered project '{}' ({}) at {}",
+                            proj.name, proj.id, proj.path
+                        );
+                    }
+                    ProjectAction::List => {
+                        let projects = client.projects_list().await?;
+                        display_project_list(&projects);
+                    }
+                    ProjectAction::Show { name } => {
+                        match client.project_get(&name).await {
+                            Ok(proj) => {
+                                println!("Project: {}", proj.name);
+                                println!("  ID: {}", proj.id);
+                                println!("  Path: {}", proj.path);
+                                println!("  Registered: {}", proj.registered_at);
+                            }
+                            Err(_) => println!("Project '{}' not found", name),
+                        }
+                    }
+                    ProjectAction::Remove { name } => {
+                        match client.project_remove(&name).await {
+                            Ok(()) => println!("Removed project '{}'", name),
+                            Err(_) => println!("Project '{}' not found", name),
+                        }
+                    }
+                }
+                return Ok(());
+            }
+
+            // Local fallback
             let db_path = db_path()?;
             let database = db::Database::open(&db_path).await?;
             let store = project::ProjectStore::new(database);
@@ -479,21 +547,11 @@ async fn main() -> anyhow::Result<()> {
                 }
                 ProjectAction::List => {
                     let projects = store.list().await?;
-                    if projects.is_empty() {
-                        println!("No projects registered");
-                    } else {
-                        println!("{:<20} {:<10} {:<40}", "Name", "ID", "Path");
-                        println!("{}", "=".repeat(70));
-                        for proj in projects {
-                            let path_str = proj.path.display().to_string();
-                            let path_display = if path_str.len() > 40 {
-                                format!("{}...", &path_str[..37])
-                            } else {
-                                path_str
-                            };
-                            println!("{:<20} {:<10} {:<40}", proj.name, proj.id, path_display);
-                        }
-                    }
+                    let responses: Vec<_> = projects
+                        .into_iter()
+                        .map(rustagent::daemon::api::projects::ProjectResponse::from)
+                        .collect();
+                    display_project_list(&responses);
                 }
                 ProjectAction::Show { name } => match store.get_by_name(&name).await? {
                     Some(proj) => {
@@ -517,7 +575,91 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         Commands::Tasks { action } => {
-            // Open database
+            if let Some(ref client) = daemon_client {
+                match action {
+                    Some(TaskAction::List { status: _ }) => {
+                        if let Some(ref proj) = cli.project {
+                            let goals = client.goals_list(proj).await?;
+                            if let Some(goal) = goals.first() {
+                                let tasks = client.tasks_list(&goal.id).await?;
+                                display_task_list(&tasks);
+                            } else {
+                                println!("No goals found for project");
+                            }
+                        } else {
+                            println!("Project must be specified with --project flag");
+                        }
+                    }
+                    Some(TaskAction::Ready) => {
+                        if let Some(ref proj) = cli.project {
+                            let goals = client.goals_list(proj).await?;
+                            if let Some(goal) = goals.first() {
+                                let tasks = client.tasks_ready(&goal.id).await?;
+                                if tasks.is_empty() {
+                                    println!("No ready tasks");
+                                } else {
+                                    println!("Ready tasks:");
+                                    display_task_list(&tasks);
+                                }
+                            } else {
+                                println!("No goals found for project");
+                            }
+                        } else {
+                            println!("Project must be specified with --project flag");
+                        }
+                    }
+                    Some(TaskAction::Next) => {
+                        if let Some(ref proj) = cli.project {
+                            let goals = client.goals_list(proj).await?;
+                            if let Some(goal) = goals.first() {
+                                match client.tasks_next(&goal.id).await? {
+                                    Some(task) => {
+                                        println!("Recommended next task:");
+                                        println!("  ID: {}", task.id);
+                                        println!("  Title: {}", task.title);
+                                        println!("  Description: {}", task.description);
+                                        if let Some(priority) = task.priority {
+                                            println!("  Priority: {}", priority);
+                                        }
+                                    }
+                                    None => println!("No ready tasks"),
+                                }
+                            } else {
+                                println!("No goals found for project");
+                            }
+                        } else {
+                            println!("Project must be specified with --project flag");
+                        }
+                    }
+                    Some(TaskAction::Tree) => {
+                        if let Some(ref proj) = cli.project {
+                            let goals = client.goals_list(proj).await?;
+                            if let Some(goal) = goals.first() {
+                                let tasks = client.tasks_list(&goal.id).await?;
+                                println!("Task tree for {}:", goal.id);
+                                for node in &tasks {
+                                    println!(
+                                        "  - {} ({}): {}",
+                                        node.id, node.status, node.title
+                                    );
+                                }
+                            } else {
+                                println!("No goals found for project");
+                            }
+                        } else {
+                            println!("Project must be specified with --project flag");
+                        }
+                    }
+                    None => {
+                        println!(
+                            "Please specify a task action: list, ready, next, or tree"
+                        );
+                    }
+                }
+                return Ok(());
+            }
+
+            // Local fallback
             let db_path = db_path()?;
             let database = db::Database::open(&db_path).await?;
             let graph_store = rustagent::graph::store::SqliteGraphStore::new(database.clone());
@@ -685,38 +827,154 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         Commands::Status => {
-            // Open database
+            if let Some(ref client) = daemon_client {
+                if let Some(ref proj_name) = cli.project {
+                    match client.project_get(proj_name).await {
+                        Ok(project) => {
+                            println!("Project: {} ({}) [via daemon]", project.name, project.id);
+                            let goals = client.goals_list(proj_name).await?;
+                            if let Some(goal) = goals.first() {
+                                println!("Goal: {} ({})", goal.title, goal.id);
+                                let tasks = client.tasks_list(&goal.id).await?;
+                                display_task_summary(&tasks);
+                            } else {
+                                println!("No active goal");
+                            }
+                        }
+                        Err(_) => println!("Project '{}' not found", proj_name),
+                    }
+                } else {
+                    println!("Project must be specified with --project flag (daemon mode)");
+                }
+                return Ok(());
+            }
+
+            // Local fallback
             let db_path = db_path()?;
             let database = db::Database::open(&db_path).await?;
             let graph_store = rustagent::graph::store::SqliteGraphStore::new(database.clone());
 
-            if let Some(proj) = cli.project {
-                let graph = graph_store.get_full_graph(&proj).await?;
-                println!("Status for {}:", proj);
-                println!("  Total nodes: {}", graph.nodes.len());
-                println!("  Total edges: {}", graph.edges.len());
+            let project_opt = resolve_project(&database, cli.project.as_deref()).await?;
+            if let Some(project) = project_opt {
+                println!("Project: {} ({})", project.name, project.id);
 
-                println!("\nBreakdown:");
-                let mut pending_count = 0;
-                let mut ready_count = 0;
-                let mut completed_count = 0;
-                for node in &graph.nodes {
-                    match node.status {
-                        rustagent::graph::NodeStatus::Pending => pending_count += 1,
-                        rustagent::graph::NodeStatus::Ready => ready_count += 1,
-                        rustagent::graph::NodeStatus::Completed => completed_count += 1,
-                        _ => {}
+                // Find the latest goal for this project
+                let goals = graph_store
+                    .query_nodes(&rustagent::graph::store::NodeQuery {
+                        node_type: Some(rustagent::graph::NodeType::Goal),
+                        status: None,
+                        project_id: Some(project.id.clone()),
+                        parent_id: None,
+                        query: None,
+                    })
+                    .await?;
+
+                let latest_goal = goals.iter().max_by_key(|g| g.created_at);
+
+                if let Some(goal) = latest_goal {
+                    println!("Goal: {} ({})", goal.title, goal.id);
+
+                    // Check for active session
+                    let session_store =
+                        rustagent::graph::session::SessionStore::new(database.clone());
+                    if let Ok(Some(session)) = session_store.get_latest_session(&goal.id).await {
+                        let status_str = if session.ended_at.is_some() {
+                            "ended"
+                        } else {
+                            "active"
+                        };
+                        println!("Session: {} ({})", session.id, status_str);
                     }
+
+                    // Get task breakdown
+                    if let Ok(subtree) = graph_store.get_subtree(&goal.id).await {
+                        let tasks: Vec<_> = subtree
+                            .iter()
+                            .filter(|n| n.node_type == rustagent::graph::NodeType::Task)
+                            .collect();
+
+                        let total = tasks.len();
+                        let completed = tasks
+                            .iter()
+                            .filter(|t| {
+                                t.status == rustagent::graph::NodeStatus::Completed
+                            })
+                            .count();
+                        let in_progress = tasks
+                            .iter()
+                            .filter(|t| {
+                                t.status == rustagent::graph::NodeStatus::InProgress
+                            })
+                            .count();
+                        let ready = tasks
+                            .iter()
+                            .filter(|t| t.status == rustagent::graph::NodeStatus::Ready)
+                            .count();
+                        let blocked = tasks
+                            .iter()
+                            .filter(|t| {
+                                t.status == rustagent::graph::NodeStatus::Blocked
+                            })
+                            .count();
+                        let failed = tasks
+                            .iter()
+                            .filter(|t| t.status == rustagent::graph::NodeStatus::Failed)
+                            .count();
+
+                        println!("\nTask Progress:");
+                        println!("  Completed: {}/{}", completed, total);
+                        if in_progress > 0 {
+                            println!("  In Progress: {}", in_progress);
+                        }
+                        if ready > 0 {
+                            println!("  Ready: {}", ready);
+                        }
+                        if blocked > 0 {
+                            println!("  Blocked: {}", blocked);
+                        }
+                        if failed > 0 {
+                            println!("  Failed: {}", failed);
+                        }
+
+                        // Show active workers (tasks that are InProgress with assigned_to)
+                        let active: Vec<_> = tasks
+                            .iter()
+                            .filter(|t| {
+                                t.status == rustagent::graph::NodeStatus::InProgress
+                                    && t.assigned_to.is_some()
+                            })
+                            .collect();
+                        if !active.is_empty() {
+                            println!("\nActive Workers:");
+                            for task in active {
+                                println!(
+                                    "  {}: Working on {} \"{}\"",
+                                    task.assigned_to.as_deref().unwrap_or("unknown"),
+                                    task.id,
+                                    task.title
+                                );
+                            }
+                        }
+                    }
+                } else {
+                    println!("No active goal");
                 }
-                println!("  Pending: {}", pending_count);
-                println!("  Ready: {}", ready_count);
-                println!("  Completed: {}", completed_count);
             } else {
-                println!("Project must be specified with --project flag");
+                println!("No project specified or found in current directory");
             }
         }
         Commands::Search { query } => {
-            // Open database
+            if let Some(ref client) = daemon_client {
+                if let Some(ref proj) = cli.project {
+                    let results = client.search(proj, &query).await?;
+                    display_search_results(&query, &results);
+                } else {
+                    println!("Project must be specified with --project flag");
+                }
+                return Ok(());
+            }
+
+            // Local fallback
             let db_path = db_path()?;
             let database = db::Database::open(&db_path).await?;
             let graph_store = rustagent::graph::store::SqliteGraphStore::new(database.clone());
@@ -724,17 +982,7 @@ async fn main() -> anyhow::Result<()> {
             let results = graph_store
                 .search_nodes(&query, cli.project.as_deref(), None, 50)
                 .await?;
-
-            if results.is_empty() {
-                println!("No results found for '{}'", query);
-            } else {
-                println!("Search results for '{}':", query);
-                println!("{:<20} {:<15} {:<30}", "ID", "Type", "Title");
-                println!("{}", "=".repeat(65));
-                for node in results {
-                    println!("{:<20} {:<15} {:<30}", node.id, node.node_type, node.title);
-                }
-            }
+            display_search_results(&query, &results);
         }
         Commands::Sessions { action } => {
             // Open database
@@ -890,12 +1138,12 @@ async fn main() -> anyhow::Result<()> {
                     }
                     Err(e) => println!("Failed to read file: {}", e),
                 },
-                GraphAction::Diff { path } => match std::fs::read_to_string(&path) {
+                GraphAction::Diff { path: diff_path } => match std::fs::read_to_string(&diff_path) {
                     Ok(content) => {
                         match rustagent::graph::interchange::diff_goal(&graph_store, &content).await
                         {
                             Ok(result) => {
-                                println!("Diff results for {}:", path);
+                                println!("Diff results for {}:", diff_path);
                                 if !result.added_nodes.is_empty() {
                                     println!("  Added nodes: {}", result.added_nodes.len());
                                     for node_id in &result.added_nodes {
@@ -928,6 +1176,156 @@ async fn main() -> anyhow::Result<()> {
                     }
                     Err(e) => println!("Failed to read file: {}", e),
                 },
+            }
+        }
+        Commands::Daemon { action } => {
+            let config = rustagent::daemon::DaemonConfig::default();
+
+            match action {
+                DaemonAction::Start { bind, port } => {
+                    let config = rustagent::daemon::DaemonConfig {
+                        bind_address: bind,
+                        port,
+                        ..config
+                    };
+
+                    if rustagent::daemon::is_daemon_running(&config)? {
+                        anyhow::bail!(
+                            "Daemon is already running (PID file: {})",
+                            config.pid_file.display()
+                        );
+                    }
+
+                    rustagent::daemon::write_pid_file(&config)?;
+
+                    let cleanup_config = config.clone();
+                    let shutdown_token = tokio_util::sync::CancellationToken::new();
+                    let shutdown_clone = shutdown_token.clone();
+
+                    tokio::spawn(async move {
+                        tokio::signal::ctrl_c().await.ok();
+                        println!("\nDaemon shutting down...");
+                        shutdown_clone.cancel();
+                    });
+
+                    // Open database
+                    let db_path = db_path()?;
+                    let database = db::Database::open(&db_path).await?;
+
+                    // Create shared dependencies
+                    let graph_store: std::sync::Arc<dyn GraphStore> =
+                        std::sync::Arc::new(rustagent::graph::store::SqliteGraphStore::new(
+                            database.clone(),
+                        ));
+                    let message_bus: std::sync::Arc<dyn rustagent::message::MessageBus> =
+                        std::sync::Arc::new(rustagent::message::TokioMessageBus::default());
+
+                    let state = rustagent::daemon::api::AppState::new(
+                        database,
+                        graph_store,
+                        message_bus.clone(),
+                    );
+
+                    // Start the MessageBus-to-WebSocket bridge
+                    let _ws_bridge = rustagent::daemon::ws::start_ws_bridge(
+                        message_bus,
+                        state.ws_tx.clone(),
+                    );
+
+                    println!(
+                        "Daemon listening on {}:{}",
+                        config.bind_address, config.port
+                    );
+
+                    // Start the HTTP server (blocks until shutdown)
+                    rustagent::daemon::server::start_server(&config, state, shutdown_token)
+                        .await?;
+
+                    // Cleanup
+                    rustagent::daemon::remove_pid_file(&cleanup_config)?;
+                    println!("Daemon stopped.");
+                }
+                DaemonAction::Stop => {
+                    match rustagent::daemon::read_pid_file(&config)? {
+                        Some(pid) => {
+                            if !rustagent::daemon::is_daemon_running(&config)? {
+                                println!(
+                                    "Stale PID file (process {} not running). Cleaning up.",
+                                    pid
+                                );
+                                rustagent::daemon::remove_pid_file(&config)?;
+                                return Ok(());
+                            }
+
+                            println!("Stopping daemon (PID {})...", pid);
+                            #[cfg(unix)]
+                            unsafe {
+                                libc::kill(pid as i32, libc::SIGTERM);
+                            }
+                            println!("Signal sent. Daemon should stop shortly.");
+                        }
+                        None => {
+                            println!("No daemon is running (no PID file found).");
+                        }
+                    }
+                }
+                DaemonAction::Status => {
+                    if rustagent::daemon::is_daemon_running(&config)? {
+                        let pid = rustagent::daemon::read_pid_file(&config)?.unwrap();
+                        println!("Daemon is running (PID {})", pid);
+                        println!("  Address: {}:{}", config.bind_address, config.port);
+                        println!("  PID file: {}", config.pid_file.display());
+                    } else {
+                        println!("Daemon is not running.");
+                        if config.pid_file.exists() {
+                            println!("  (stale PID file at {})", config.pid_file.display());
+                        }
+                    }
+                }
+                DaemonAction::Logs { lines, follow } => {
+                    let log_dir = &config.log_dir;
+                    if !log_dir.exists() {
+                        println!("No log directory found at {}", log_dir.display());
+                        return Ok(());
+                    }
+
+                    let mut entries: Vec<_> = std::fs::read_dir(log_dir)?
+                        .filter_map(|e| e.ok())
+                        .filter(|e| {
+                            e.path()
+                                .extension()
+                                .map_or(false, |ext| ext == "log")
+                        })
+                        .collect();
+                    entries.sort_by_key(|e| {
+                        std::cmp::Reverse(
+                            e.metadata().ok().and_then(|m| m.modified().ok()),
+                        )
+                    });
+
+                    if entries.is_empty() {
+                        println!("No log files found in {}", log_dir.display());
+                        return Ok(());
+                    }
+
+                    let log_file = entries[0].path();
+                    println!("Tailing {}", log_file.display());
+
+                    if follow {
+                        let status = std::process::Command::new("tail")
+                            .args(["-n", &lines.to_string(), "-f"])
+                            .arg(&log_file)
+                            .status()?;
+                        std::process::exit(status.code().unwrap_or(1));
+                    } else {
+                        let content = std::fs::read_to_string(&log_file)?;
+                        let all_lines: Vec<&str> = content.lines().collect();
+                        let start = all_lines.len().saturating_sub(lines);
+                        for line in &all_lines[start..] {
+                            println!("{}", line);
+                        }
+                    }
+                }
             }
         }
     }

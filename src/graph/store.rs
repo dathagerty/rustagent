@@ -18,14 +18,14 @@ pub enum EdgeDirection {
 }
 
 /// A graph containing nodes and edges (used in history/full graph queries)
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct WorkGraph {
     pub nodes: Vec<GraphNode>,
     pub edges: Vec<GraphEdge>,
 }
 
 /// Query builder for flexible node searches
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct NodeQuery {
     pub node_type: Option<NodeType>,
     pub status: Option<NodeStatus>,
@@ -115,6 +115,13 @@ pub trait GraphStore: Send + Sync {
 
     /// Get the next child sequence number for a parent, atomically increment, and return old value
     async fn next_child_seq(&self, parent_id: &str) -> Result<u32>;
+
+    /// Import nodes and edges in a single atomic transaction
+    async fn import_nodes_and_edges(
+        &self,
+        nodes: Vec<GraphNode>,
+        edges: Vec<GraphEdge>,
+    ) -> Result<()>;
 }
 
 /// SQLite implementation of GraphStore
@@ -1018,12 +1025,8 @@ impl GraphStore for SqliteGraphStore {
 
         Ok(seq)
     }
-}
 
-impl SqliteGraphStore {
-    /// Import nodes and edges in a single BEGIN IMMEDIATE transaction
-    /// This ensures atomic import: either all succeed or all fail
-    pub async fn import_nodes_and_edges(
+    async fn import_nodes_and_edges(
         &self,
         nodes: Vec<GraphNode>,
         edges: Vec<GraphEdge>,

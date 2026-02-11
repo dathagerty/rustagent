@@ -290,4 +290,12 @@ impl GraphStore for MockGraphStore {
     async fn next_child_seq(&self, _parent_id: &str) -> Result<u32> {
         Ok(1)
     }
+
+    async fn import_nodes_and_edges(
+        &self,
+        _nodes: Vec<GraphNode>,
+        _edges: Vec<GraphEdge>,
+    ) -> Result<()> {
+        Ok(())
+    }
 }

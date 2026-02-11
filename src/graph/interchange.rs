@@ -3,7 +3,7 @@
 /// This module provides deterministic, git-friendly graph serialization.
 /// TOML files are per-goal, with sorted keys (BTreeMap) for reproducible output.
 /// Content hash enables detecting changes, and conflict strategies handle imports.
-use crate::graph::store::{GraphStore, SqliteGraphStore};
+use crate::graph::store::GraphStore;
 use crate::graph::{EdgeType, GraphEdge, GraphNode};
 use anyhow::{Context, Result};
 use chrono::Utc;
@@ -81,7 +81,7 @@ pub enum ImportStrategy {
 }
 
 /// A conflict detected during import
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ImportConflict {
     pub node_id: String,
     pub field: String,
@@ -90,7 +90,7 @@ pub struct ImportConflict {
 }
 
 /// Result of importing TOML data
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ImportResult {
     pub added_nodes: usize,
     pub added_edges: usize,
@@ -100,7 +100,7 @@ pub struct ImportResult {
 }
 
 /// Difference between TOML and DB state
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct DiffResult {
     pub added_nodes: Vec<String>,                  // In file but not in DB
     pub changed_nodes: Vec<(String, Vec<String>)>, // (id, changed_fields)
@@ -118,7 +118,7 @@ pub struct DiffResult {
 /// - Content hash computed from nodes + edges
 /// - Null/empty fields omitted
 pub async fn export_goal(
-    graph_store: &SqliteGraphStore,
+    graph_store: &dyn GraphStore,
     goal_id: &str,
     project_name: &str,
 ) -> Result<String> {
@@ -188,7 +188,7 @@ pub async fn export_goal(
 ///
 /// All writes in a single BEGIN IMMEDIATE transaction.
 pub async fn import_goal(
-    graph_store: &SqliteGraphStore,
+    graph_store: &dyn GraphStore,
     toml_content: &str,
     strategy: ImportStrategy,
 ) -> Result<ImportResult> {
@@ -300,7 +300,7 @@ pub async fn import_goal(
 /// Diff TOML file against current DB state
 ///
 /// Shows what would change if the TOML were imported without making changes.
-pub async fn diff_goal(graph_store: &SqliteGraphStore, toml_content: &str) -> Result<DiffResult> {
+pub async fn diff_goal(graph_store: &dyn GraphStore, toml_content: &str) -> Result<DiffResult> {
     let goal_file: GoalFile =
         toml::from_str(toml_content).context("Failed to parse TOML goal file")?;
 

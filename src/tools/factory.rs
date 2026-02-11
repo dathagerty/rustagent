@@ -1,8 +1,11 @@
+use crate::agent::AgentId;
 use crate::context::ReadAgentsMdTool;
 use crate::graph::store::GraphStore;
+use crate::message::MessageBus;
 use crate::security::SecurityValidator;
 use crate::security::permission::PermissionHandler;
 use crate::tools::ToolRegistry;
+use crate::tools::agent_tools::{QueryAgentStatusTool, SendMessageTool, SpawnSubAgentTool};
 use crate::tools::file::{ListFilesTool, ReadFileTool, WriteFileTool};
 use crate::tools::graph_tools::{
     AddEdgeTool, ChooseOptionTool, ClaimTaskTool, CreateNodeTool, LogDecisionTool, QueryNodesTool,
@@ -39,11 +42,16 @@ pub fn create_default_registry(
     registry
 }
 
-/// Create a v2 registry for agent runtime with graph tools registered
+/// Create a v2 registry for agent runtime with graph tools registered.
+///
+/// Pass `message_bus` and `agent_id` for multi-agent mode (enables agent tools).
+/// Pass `None, None` for single-agent mode (agent tools are omitted).
 pub fn create_v2_registry(
     validator: Arc<SecurityValidator>,
     permission_handler: Arc<dyn PermissionHandler>,
     graph_store: Arc<dyn GraphStore>,
+    message_bus: Option<Arc<dyn MessageBus>>,
+    agent_id: Option<AgentId>,
 ) -> ToolRegistry {
     let registry = create_default_registry(validator, permission_handler);
 
@@ -58,10 +66,21 @@ pub fn create_v2_registry(
     registry.register(Arc::new(ChooseOptionTool::new(graph_store.clone())));
     registry.register(Arc::new(RecordOutcomeTool::new(graph_store.clone())));
     registry.register(Arc::new(RecordObservationTool::new(graph_store.clone())));
-    registry.register(Arc::new(RevisitTool::new(graph_store)));
+    registry.register(Arc::new(RevisitTool::new(graph_store.clone())));
 
     // Register context tools
     registry.register(Arc::new(ReadAgentsMdTool::new()));
+
+    // Register agent tools (only in multi-agent mode)
+    if let (Some(bus), Some(id)) = (message_bus, agent_id) {
+        registry.register(Arc::new(SpawnSubAgentTool::new(
+            graph_store.clone(),
+            bus.clone(),
+            id.clone(),
+        )));
+        registry.register(Arc::new(SendMessageTool::new(bus.clone())));
+        registry.register(Arc::new(QueryAgentStatusTool::new(graph_store)));
+    }
 
     registry
 }

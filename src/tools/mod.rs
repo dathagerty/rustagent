@@ -80,6 +80,7 @@ impl Default for ToolRegistry {
     }
 }
 
+pub mod agent_tools;
 pub mod factory;
 pub mod file;
 pub mod graph_tools;

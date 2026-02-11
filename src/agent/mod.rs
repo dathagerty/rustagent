@@ -1,6 +1,9 @@
 pub mod builtin_profiles;
+pub mod orchestrator;
 pub mod profile;
 pub mod runtime;
+pub mod work_package;
+pub mod worktree;
 
 use crate::graph::GraphNode;
 use crate::graph::store::GraphStore;
@@ -35,7 +38,7 @@ pub trait Agent: Send + Sync {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AgentOutcome {
     /// Task completed successfully
-    Completed { summary: String },
+    Completed { summary: String, tokens_used: usize },
 
     /// Agent blocked due to unresolvable issues
     Blocked { reason: String },
