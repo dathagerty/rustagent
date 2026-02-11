@@ -3,7 +3,7 @@
  * Manages search query, results, and filters.
  */
 
-import { createApiClient } from '../api/client';
+import { apiClient } from '../api';
 import type { GraphNode, NodeType } from '../types';
 
 /**
@@ -23,8 +23,6 @@ export const searchState = $state<{
   loading: false,
   error: null,
 });
-
-const apiClient = createApiClient();
 
 /**
  * Execute a search for nodes.

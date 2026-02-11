@@ -3,7 +3,7 @@
  * Manages the list of projects and selected project.
  */
 
-import { createApiClient } from '../api/client';
+import { apiClient } from '../api';
 import type { ProjectResponse } from '../types';
 
 /**
@@ -33,8 +33,6 @@ export function getSelectedProject(): ProjectResponse | null {
     projectsState.projects.find((p) => p.id === projectsState.selectedProjectId) || null
   );
 }
-
-const apiClient = createApiClient();
 
 /**
  * Load all projects from the API.

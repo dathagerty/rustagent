@@ -3,7 +3,7 @@
  * Manages active agents and WebSocket event stream.
  */
 
-import { createApiClient } from '../api/client';
+import { apiClient } from '../api';
 import type { ActiveAgent, WsEvent } from '../types';
 
 /**
@@ -21,7 +21,6 @@ export const agentsState = $state<{
   loading: false,
 });
 
-const apiClient = createApiClient();
 const MAX_FEED_SIZE = 200;
 
 /**

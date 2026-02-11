@@ -4,9 +4,9 @@
    * Renders a simple message indicating the view is coming soon.
    */
 
-  interface Props {
+  type Props = {
     name: string;
-  }
+  };
 
   let { name }: Props = $props();
 </script>

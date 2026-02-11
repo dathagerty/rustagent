@@ -3,7 +3,7 @@
  * Manages nodes, edges, goal trees, tasks, and decisions.
  */
 
-import { createApiClient } from '../api/client';
+import { apiClient } from '../api';
 import type {
   GoalTree,
   GraphNode,
@@ -18,6 +18,7 @@ import type {
  * Managed as Svelte 5 $state for reactivity.
  */
 export const graphState = $state<{
+  goals: Array<GraphNode>;
   goalTree: GoalTree | null;
   selectedGoalId: string | null;
   selectedNodeId: string | null;
@@ -29,6 +30,7 @@ export const graphState = $state<{
   loading: boolean;
   error: string | null;
 }>({
+  goals: [],
   goalTree: null,
   selectedGoalId: null,
   selectedNodeId: null,
@@ -70,8 +72,6 @@ export function getTasksByStatus(): Record<NodeStatus, Array<GraphNode>> {
   return result;
 }
 
-const apiClient = createApiClient();
-
 /**
  * Load all goals for a project.
  */
@@ -79,9 +79,7 @@ export async function loadGoals(projectId: string): Promise<void> {
   graphState.loading = true;
   graphState.error = null;
   try {
-    // Store goals in a temporary location; they're not directly shown in graphState
-    // but are used to populate the goal tree
-    await apiClient.listGoals(projectId);
+    graphState.goals = await apiClient.listGoals(projectId);
   } catch (error) {
     graphState.error = error instanceof Error ? error.message : 'Unknown error';
   } finally {

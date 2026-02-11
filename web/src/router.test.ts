@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { matchRoute } from './router.svelte';
 
-
 describe('matchRoute', () => {
   const routes = [
     { pattern: '/', name: 'dashboard' },

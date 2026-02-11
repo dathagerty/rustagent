@@ -4,18 +4,21 @@
    * Provides links to main views and a project selector.
    */
 
-  import { navigate, routerState, getCurrentRoute } from '../router.svelte';
+  import { navigate, routerState } from '../router.svelte';
   import { projectsState, getSelectedProject, loadProjects } from '../stores/projects.svelte';
 
   // Determine if a link is active based on current route
   function isActive(route: string): boolean {
-    const currentRoute = getCurrentRoute();
     return routerState.path === route;
   }
 
+  // Track whether we've attempted to load projects to avoid infinite retries on error
+  let loadAttempted = false;
+
   // Load projects on mount
   $effect(() => {
-    if (projectsState.projects.length === 0) {
+    if (projectsState.projects.length === 0 && !loadAttempted) {
+      loadAttempted = true;
       loadProjects();
     }
   });

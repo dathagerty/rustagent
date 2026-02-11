@@ -5,10 +5,11 @@
    * Manages WebSocket connection and dispatches events to stores.
    */
 
-  import { getCurrentRoute, navigate, routerState } from './router.svelte';
+  import { getCurrentRoute, routerState } from './router.svelte';
   import { createWsConnection } from './api/websocket';
   import { handleWsEvent as handleGraphWsEvent } from './stores/graph.svelte';
   import { handleWsEvent as handleAgentsWsEvent } from './stores/agents.svelte';
+  import type { WsEvent } from './types';
   import Sidebar from './components/Sidebar.svelte';
   import Placeholder from './views/Placeholder.svelte';
 
@@ -21,7 +22,7 @@
       wsConnection.connect();
 
       // Register event handler that dispatches to all stores
-      const handleEvent = (event: any) => {
+      const handleEvent = (event: WsEvent) => {
         handleGraphWsEvent(event);
         handleAgentsWsEvent(event);
       };
