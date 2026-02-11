@@ -13,6 +13,7 @@
   import Sidebar from './components/Sidebar.svelte';
   import Dashboard from './views/Dashboard.svelte';
   import ProjectList from './views/ProjectList.svelte';
+  import ProjectDetail from './views/ProjectDetail.svelte';
   import Placeholder from './views/Placeholder.svelte';
 
   let wsConnection: ReturnType<typeof createWsConnection> | null = null;
@@ -54,7 +55,7 @@
     {:else if currentRoute.name === 'project-list'}
       <ProjectList />
     {:else if currentRoute.name === 'project-detail'}
-      <Placeholder name="Project Detail" />
+      <ProjectDetail />
     {:else if currentRoute.name === 'task-tree'}
       <Placeholder name="Task Tree" />
     {:else if currentRoute.name === 'decision-graph'}
