@@ -60,13 +60,11 @@ impl Tool for CodeSearchTool {
 
         let file_glob = params["file_glob"].as_str();
         let directory = params["directory"].as_str();
-        let max_results = params["max_results"]
-            .as_u64()
-            .unwrap_or(50) as usize;
+        let max_results = params["max_results"].as_u64().unwrap_or(50) as usize;
 
         // Compile regex pattern
-        let regex = Regex::new(pattern_str)
-            .context(format!("Invalid regex pattern: {}", pattern_str))?;
+        let regex =
+            Regex::new(pattern_str).context(format!("Invalid regex pattern: {}", pattern_str))?;
 
         // Compile glob pattern if provided
         let glob_pattern = file_glob
@@ -82,10 +80,7 @@ impl Tool for CodeSearchTool {
         };
 
         if !search_root.exists() {
-            anyhow::bail!(
-                "Search directory does not exist: {}",
-                search_root.display()
-            );
+            anyhow::bail!("Search directory does not exist: {}", search_root.display());
         }
 
         // Hidden directories to skip
@@ -96,19 +91,16 @@ impl Tool for CodeSearchTool {
         let mut capped = false;
 
         // Walk directory tree
-        for entry in WalkDir::new(&search_root)
-            .into_iter()
-            .filter_entry(|e| {
-                // Skip hidden directories
-                let file_name = e.file_name().to_string_lossy();
-                if e.file_type().is_dir() && file_name.starts_with('.') {
-                    let name_str = file_name.as_ref();
-                    !skip_dirs.contains(&name_str)
-                } else {
-                    true
-                }
-            })
-        {
+        for entry in WalkDir::new(&search_root).into_iter().filter_entry(|e| {
+            // Skip hidden directories
+            let file_name = e.file_name().to_string_lossy();
+            if e.file_type().is_dir() && file_name.starts_with('.') {
+                let name_str = file_name.as_ref();
+                !skip_dirs.contains(&name_str)
+            } else {
+                true
+            }
+        }) {
             let entry = entry?;
             let path = entry.path();
 
@@ -119,10 +111,7 @@ impl Tool for CodeSearchTool {
 
             // Check glob filter if provided
             if let Some(ref pattern) = glob_pattern {
-                let file_name = path
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("");
+                let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
                 if !pattern.matches(file_name) {
                     continue;
                 }
@@ -212,8 +201,16 @@ mod tests {
 
         // Create test files
         std::fs::write(project_root.join("main.rs"), "fn main() {}").unwrap();
-        std::fs::write(project_root.join("lib.rs"), "pub fn add(a: i32, b: i32) -> i32 { a + b }").unwrap();
-        std::fs::write(project_root.join("README.md"), "# My Project\npub fn should_not_match").unwrap();
+        std::fs::write(
+            project_root.join("lib.rs"),
+            "pub fn add(a: i32, b: i32) -> i32 { a + b }",
+        )
+        .unwrap();
+        std::fs::write(
+            project_root.join("README.md"),
+            "# My Project\npub fn should_not_match",
+        )
+        .unwrap();
 
         let tool = CodeSearchTool::new(project_root);
         let params = json!({
@@ -239,7 +236,8 @@ mod tests {
         std::fs::write(
             project_root.join("test.rs"),
             "fn one()\nfn two()\nfn three()\nfn four()\nfn five()",
-        ).unwrap();
+        )
+        .unwrap();
 
         let tool = CodeSearchTool::new(project_root);
         let params = json!({
@@ -282,7 +280,11 @@ mod tests {
         // Create directory structure
         std::fs::create_dir_all(project_root.join("src/utils")).unwrap();
         std::fs::write(project_root.join("main.rs"), "fn main() {}").unwrap();
-        std::fs::write(project_root.join("src/utils/helper.rs"), "pub fn helper() {}").unwrap();
+        std::fs::write(
+            project_root.join("src/utils/helper.rs"),
+            "pub fn helper() {}",
+        )
+        .unwrap();
 
         let tool = CodeSearchTool::new(project_root);
         let params = json!({

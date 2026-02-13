@@ -488,7 +488,14 @@ async fn test_registry_excludes_agent_tools_in_single_agent_mode() {
 
     let project_root = std::path::PathBuf::from("/tmp");
 
-    let registry = create_v2_registry(validator, permission_handler, graph_store, None, None, project_root);
+    let registry = create_v2_registry(
+        validator,
+        permission_handler,
+        graph_store,
+        None,
+        None,
+        project_root,
+    );
 
     let tools = registry.list();
     assert!(!tools.contains(&"spawn_sub_agent".to_string()));

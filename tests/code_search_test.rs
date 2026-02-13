@@ -15,11 +15,13 @@ async fn code_search_integration_finds_pattern() {
     std::fs::write(
         project_root.join("src/main.rs"),
         "fn main() {\n    println!(\"hello\");\n}",
-    ).unwrap();
+    )
+    .unwrap();
     std::fs::write(
         project_root.join("src/lib.rs"),
         "pub fn add(a: i32, b: i32) -> i32 { a + b }",
-    ).unwrap();
+    )
+    .unwrap();
 
     let tool = CodeSearchTool::new(project_root);
     let params = json!({
@@ -44,8 +46,13 @@ async fn code_search_integration_with_file_glob() {
     std::fs::write(
         project_root.join("src/lib.rs"),
         "pub fn add(a: i32, b: i32) -> i32 { a + b }",
-    ).unwrap();
-    std::fs::write(project_root.join("README.md"), "# My Project\npub fn should_not_match").unwrap();
+    )
+    .unwrap();
+    std::fs::write(
+        project_root.join("README.md"),
+        "# My Project\npub fn should_not_match",
+    )
+    .unwrap();
 
     let tool = CodeSearchTool::new(project_root);
     let params = json!({
@@ -71,7 +78,8 @@ async fn code_search_integration_result_capping() {
     std::fs::write(
         project_root.join("test.rs"),
         "fn one()\nfn two()\nfn three()\nfn four()\nfn five()",
-    ).unwrap();
+    )
+    .unwrap();
 
     let tool = CodeSearchTool::new(project_root);
     let params = json!({
@@ -117,7 +125,8 @@ async fn code_search_integration_with_directory_scope() {
     std::fs::write(
         project_root.join("src/utils/helper.rs"),
         "pub fn helper() {}",
-    ).unwrap();
+    )
+    .unwrap();
 
     let tool = CodeSearchTool::new(project_root);
     let params = json!({
@@ -141,11 +150,13 @@ async fn code_search_integration_multiple_files() {
     std::fs::write(
         project_root.join("src/main.rs"),
         "fn main() {\n    println!(\"hello\");\n}",
-    ).unwrap();
+    )
+    .unwrap();
     std::fs::write(
         project_root.join("src/lib.rs"),
         "pub fn add(a: i32, b: i32) -> i32 { a + b }",
-    ).unwrap();
+    )
+    .unwrap();
 
     let tool = CodeSearchTool::new(project_root);
     let params = json!({

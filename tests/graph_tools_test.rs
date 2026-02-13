@@ -665,7 +665,14 @@ fn test_v2_registry_includes_all_tools() {
     let project_root = std::path::PathBuf::from("/tmp");
 
     // Create the v2 registry
-    let registry = create_v2_registry(validator, permission_handler, graph_store, None, None, project_root);
+    let registry = create_v2_registry(
+        validator,
+        permission_handler,
+        graph_store,
+        None,
+        None,
+        project_root,
+    );
 
     // Expected tool names: graph tools + legacy tools + context tools + search tools
     let expected_tools = vec![

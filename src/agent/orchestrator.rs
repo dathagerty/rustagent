@@ -1128,7 +1128,8 @@ impl Orchestrator {
     /// Uses `metadata["blocker_task_id"]` (set by `cascade_block_to_dependents`) to
     /// reliably identify which task is the blocker — no string parsing of blocked_reason.
     async fn try_unblock_tasks(&self, _goal_id: &str) -> Result<()> {
-        let blocked_tasks = self.graph_store
+        let blocked_tasks = self
+            .graph_store
             .query_nodes(&NodeQuery {
                 node_type: Some(NodeType::Task),
                 status: Some(NodeStatus::Blocked),
@@ -1152,10 +1153,10 @@ impl Orchestrator {
                             .update_node(
                                 &task.id,
                                 Some(NodeStatus::Ready),
-                                None,                // title unchanged
-                                None,                // description unchanged
-                                Some(""),            // clear blocked_reason by setting to empty string
-                                Some(&metadata),     // metadata with blocker_task_id removed
+                                None,            // title unchanged
+                                None,            // description unchanged
+                                Some(""),        // clear blocked_reason by setting to empty string
+                                Some(&metadata), // metadata with blocker_task_id removed
                             )
                             .await?;
 
@@ -1179,7 +1180,8 @@ impl Orchestrator {
         // DependsOn edge direction: if B DependsOn A, edge is from=B, to=A.
         // So get_edges(A, Incoming) finds edges where to_node=A, returning
         // the related from_node (B) — i.e., all tasks that depend on A.
-        let edges = self.graph_store
+        let edges = self
+            .graph_store
             .get_edges(blocker_id, EdgeDirection::Incoming)
             .await?;
 
@@ -1188,7 +1190,10 @@ impl Orchestrator {
         for (edge, node) in edges {
             if edge.edge_type == EdgeType::DependsOn
                 && node.node_type == NodeType::Task
-                && !matches!(node.status, NodeStatus::Completed | NodeStatus::Failed | NodeStatus::Cancelled)
+                && !matches!(
+                    node.status,
+                    NodeStatus::Completed | NodeStatus::Failed | NodeStatus::Cancelled
+                )
             {
                 // Store blocker ID in metadata for reliable lookup during unblock
                 let mut metadata = node.metadata.clone();
@@ -1198,10 +1203,10 @@ impl Orchestrator {
                     .update_node(
                         &node.id,
                         Some(NodeStatus::Blocked),
-                        None,                // title unchanged
-                        None,                // description unchanged
-                        Some(&reason),       // blocked_reason
-                        Some(&metadata),     // metadata with blocker_task_id
+                        None,            // title unchanged
+                        None,            // description unchanged
+                        Some(&reason),   // blocked_reason
+                        Some(&metadata), // metadata with blocker_task_id
                     )
                     .await?;
 
