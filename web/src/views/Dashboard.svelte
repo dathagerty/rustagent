@@ -8,7 +8,7 @@
    */
 
   import type { ActiveAgent } from '../types';
-  import { loadProjects, projectsState } from '../stores/projects.svelte';
+  import { projectsState } from '../stores/projects.svelte';
   import { apiClient } from '../api';
   import { navigate } from '../router.svelte';
   import LoadingSpinner from '../components/LoadingSpinner.svelte';
@@ -33,26 +33,24 @@
   let error = $state<string | null>(null);
 
   /**
-   * Load dashboard data on mount.
-   * Read reactive dependencies synchronously, then call async function.
+   * Reload dashboard whenever the project list changes.
+   * Projects are loaded/polled by the Sidebar, so we just react here.
    */
   $effect(() => {
-    // Read reactive deps synchronously so Svelte tracks them
     const projects = projectsState.projects;
-    loadDashboardData(projects);
+    if (projects.length > 0) {
+      loadDashboardData(projects);
+    }
   });
 
   /**
    * Async function to load all dashboard data.
    * Parallelizes goal fetches per-project, then parallelizes agent fetches.
    */
-  async function loadDashboardData(projects: typeof projectsState.projects): Promise<void> {
+  async function loadDashboardData(projects: Array<typeof projectsState.projects[number]>): Promise<void> {
     try {
       loading = true;
       error = null;
-
-      // Load all projects first
-      await loadProjects();
 
       // Fetch goals for all projects in parallel using Promise.allSettled
       const goalResults = await Promise.allSettled(

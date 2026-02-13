@@ -12,15 +12,11 @@
     return routerState.path === route;
   }
 
-  // Track whether we've attempted to load projects to avoid infinite retries on error
-  let loadAttempted = false;
-
-  // Load projects on mount
+  // Load projects on mount and poll for changes every 10 seconds
   $effect(() => {
-    if (projectsState.projects.length === 0 && !loadAttempted) {
-      loadAttempted = true;
-      loadProjects();
-    }
+    loadProjects();
+    const interval = setInterval(loadProjects, 10_000);
+    return () => clearInterval(interval);
   });
 </script>
 
