@@ -79,22 +79,22 @@ impl SecurityScope {
 
         // Check denied patterns first (deny takes precedence)
         for pattern_str in &self.denied_paths {
-            if let Ok(pattern) = Pattern::new(pattern_str) {
-                if pattern.matches_path_with(path_ref, opts) {
-                    return ScopeCheck::Denied(format!(
-                        "path matches denied pattern: {}",
-                        pattern_str
-                    ));
-                }
+            if let Ok(pattern) = Pattern::new(pattern_str)
+                && pattern.matches_path_with(path_ref, opts)
+            {
+                return ScopeCheck::Denied(format!(
+                    "path matches denied pattern: {}",
+                    pattern_str
+                ));
             }
         }
 
         // Check allowed patterns
         for pattern_str in &self.allowed_paths {
-            if let Ok(pattern) = Pattern::new(pattern_str) {
-                if pattern.matches_path_with(path_ref, opts) {
-                    return ScopeCheck::Allowed;
-                }
+            if let Ok(pattern) = Pattern::new(pattern_str)
+                && pattern.matches_path_with(path_ref, opts)
+            {
+                return ScopeCheck::Allowed;
             }
         }
 
@@ -104,10 +104,10 @@ impl SecurityScope {
     /// Check whether a shell command is permitted.
     pub fn check_command(&self, command: &str) -> ScopeCheck {
         for pattern_str in &self.allowed_commands {
-            if let Ok(pattern) = Pattern::new(pattern_str) {
-                if pattern.matches(command) {
-                    return ScopeCheck::Allowed;
-                }
+            if let Ok(pattern) = Pattern::new(pattern_str)
+                && pattern.matches(command)
+            {
+                return ScopeCheck::Allowed;
             }
         }
 
