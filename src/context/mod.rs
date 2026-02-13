@@ -111,7 +111,7 @@ impl Tool for ReadAgentsMdTool {
     }
 
     fn description(&self) -> &str {
-        "Read the full contents of an AGENTS.md file to see detailed project conventions and guidelines"
+        "Read the full contents of an AGENTS.md file to see detailed project conventions and guidelines. Accepts either a directory path (e.g., 'src/auth') or a full file path (e.g., 'src/auth/AGENTS.md')"
     }
 
     fn parameters(&self) -> serde_json::Value {
@@ -135,15 +135,22 @@ impl Tool for ReadAgentsMdTool {
 
         let path_buf = PathBuf::from(path);
 
-        // Validate that the file is named AGENTS.md
-        if path_buf.file_name() != Some(std::ffi::OsStr::new("AGENTS.md")) {
-            return Err(anyhow::anyhow!(
-                "read_agents_md can only read AGENTS.md files"
-            ));
-        }
+        // Check if path ends with AGENTS.md (direct file path)
+        let final_path = if path.ends_with("AGENTS.md") {
+            // Validate that the file is named AGENTS.md
+            if path_buf.file_name() != Some(std::ffi::OsStr::new("AGENTS.md")) {
+                return Err(anyhow::anyhow!(
+                    "read_agents_md can only read AGENTS.md files"
+                ));
+            }
+            path_buf
+        } else {
+            // Treat as directory and append /AGENTS.md
+            path_buf.join("AGENTS.md")
+        };
 
-        let content = std::fs::read_to_string(&path_buf)
-            .map_err(|e| anyhow::anyhow!("failed to read {}: {}", path, e))?;
+        let content = std::fs::read_to_string(&final_path)
+            .map_err(|e| anyhow::anyhow!("failed to read {}: {}", final_path.display(), e))?;
 
         Ok(content)
     }
@@ -220,6 +227,42 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_read_agents_md_tool_with_directory_path() -> Result<()> {
+        let tmpdir = tempfile::TempDir::new()?;
+        // Create AGENTS.md in the directory
+        std::fs::write(tmpdir.path().join("AGENTS.md"), "# Test Guidelines\n\nContent")?;
+
+        let tool = ReadAgentsMdTool::new();
+        let result = tool
+            .execute(json!({
+                "path": tmpdir.path().to_string_lossy().to_string()
+            }))
+            .await?;
+
+        assert!(result.contains("Test Guidelines"));
+        assert!(result.contains("Content"));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_read_agents_md_tool_with_full_file_path() -> Result<()> {
+        let tmpdir = tempfile::TempDir::new()?;
+        let agents_md = tmpdir.path().join("AGENTS.md");
+        std::fs::write(&agents_md, "# Test Guidelines\n\nContent")?;
+
+        let tool = ReadAgentsMdTool::new();
+        let result = tool
+            .execute(json!({
+                "path": agents_md.to_string_lossy().to_string()
+            }))
+            .await?;
+
+        assert!(result.contains("Test Guidelines"));
+        assert!(result.contains("Content"));
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn test_read_agents_md_tool_invalid_filename() {
         let tool = ReadAgentsMdTool::new();
         let result = tool
@@ -229,7 +272,7 @@ mod tests {
             .await;
 
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("AGENTS.md"));
+        assert!(result.unwrap_err().to_string().contains("failed to read"));
     }
 
     #[tokio::test]
