@@ -225,7 +225,8 @@ impl ContextBuilder {
         // Priority 3: Relevant Observations
         let mut observations_section = String::new();
         if !ctx.work_package_tasks.is_empty() {
-            observations_section.push_str("## Relevant Observations (use query_nodes(id) for full detail)\n");
+            observations_section
+                .push_str("## Relevant Observations (use query_nodes(id) for full detail)\n");
             for task in &ctx.work_package_tasks {
                 observations_section.push_str(&format!("- {}: {}\n", task.id, task.description));
             }
@@ -235,7 +236,8 @@ impl ContextBuilder {
         // Priority 4 (lowest): Project Conventions
         let mut conventions_section = String::new();
         if !ctx.agents_md_summaries.is_empty() {
-            conventions_section.push_str("## Project Conventions (use read_agents_md(path) for full text)\n");
+            conventions_section
+                .push_str("## Project Conventions (use read_agents_md(path) for full text)\n");
             for (path, heading_summary) in &ctx.agents_md_summaries {
                 conventions_section.push_str(&format!("- {}: {}\n", path, heading_summary));
             }
@@ -349,6 +351,143 @@ impl Default for ReadAgentsMdTool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agent::profile::{AgentProfile, ProfileLlmConfig};
+    use crate::graph::store::GraphStore;
+    use crate::graph::{GraphNode, NodeStatus, NodeType, Priority};
+    use crate::security::SecurityScope;
+    use anyhow::Result;
+    use async_trait::async_trait;
+    use chrono::Utc;
+    use std::collections::HashMap;
+    use std::sync::Arc;
+
+    // Shared TestGraphStore mock for tests
+    struct TestGraphStore;
+
+    #[async_trait]
+    impl GraphStore for TestGraphStore {
+        async fn create_node(&self, _node: &GraphNode) -> Result<()> {
+            Ok(())
+        }
+        async fn update_node(
+            &self,
+            _id: &str,
+            _status: Option<NodeStatus>,
+            _title: Option<&str>,
+            _description: Option<&str>,
+            _blocked_reason: Option<&str>,
+            _metadata: Option<&HashMap<String, String>>,
+        ) -> Result<()> {
+            Ok(())
+        }
+        async fn get_node(&self, _id: &str) -> Result<Option<GraphNode>> {
+            Ok(None)
+        }
+        async fn query_nodes(
+            &self,
+            _query: &crate::graph::store::NodeQuery,
+        ) -> Result<Vec<GraphNode>> {
+            Ok(vec![])
+        }
+        async fn claim_task(&self, _node_id: &str, _agent_id: &str) -> Result<bool> {
+            Ok(false)
+        }
+        async fn get_ready_tasks(&self, _goal_id: &str) -> Result<Vec<GraphNode>> {
+            Ok(vec![])
+        }
+        async fn get_next_task(&self, _goal_id: &str) -> Result<Option<GraphNode>> {
+            Ok(None)
+        }
+        async fn add_edge(&self, _edge: &crate::graph::GraphEdge) -> Result<()> {
+            Ok(())
+        }
+        async fn remove_edge(&self, _edge_id: &str) -> Result<()> {
+            Ok(())
+        }
+        async fn get_edges(
+            &self,
+            _node_id: &str,
+            _direction: crate::graph::store::EdgeDirection,
+        ) -> Result<Vec<(crate::graph::GraphEdge, GraphNode)>> {
+            Ok(vec![])
+        }
+        async fn get_children(
+            &self,
+            _node_id: &str,
+        ) -> Result<Vec<(GraphNode, crate::graph::EdgeType)>> {
+            Ok(vec![])
+        }
+        async fn get_subtree(&self, _node_id: &str) -> Result<Vec<GraphNode>> {
+            Ok(vec![])
+        }
+        async fn get_active_decisions(&self, _project_id: &str) -> Result<Vec<GraphNode>> {
+            Ok(vec![])
+        }
+        async fn get_full_graph(&self, _goal_id: &str) -> Result<crate::graph::store::WorkGraph> {
+            Ok(crate::graph::store::WorkGraph {
+                nodes: vec![],
+                edges: vec![],
+            })
+        }
+        async fn search_nodes(
+            &self,
+            _query: &str,
+            _project_id: Option<&str>,
+            _node_type: Option<NodeType>,
+            _limit: usize,
+        ) -> Result<Vec<GraphNode>> {
+            Ok(vec![])
+        }
+        async fn next_child_seq(&self, _parent_id: &str) -> Result<u32> {
+            Ok(1)
+        }
+        async fn import_nodes_and_edges(
+            &self,
+            _nodes: Vec<GraphNode>,
+            _edges: Vec<crate::graph::GraphEdge>,
+        ) -> Result<()> {
+            Ok(())
+        }
+    }
+
+    // Helper function to create a test profile and context
+    fn create_test_context(
+        work_package_tasks: Vec<GraphNode>,
+        relevant_decisions: Vec<GraphNode>,
+        previous_attempt: Option<String>,
+        dependency_statuses: Vec<(String, String, bool)>,
+    ) -> AgentContext {
+        let profile = AgentProfile {
+            name: "test_coder".to_string(),
+            extends: None,
+            role: "You are a helpful code assistant".to_string(),
+            system_prompt: "Follow these rules carefully".to_string(),
+            allowed_tools: vec!["read_file".to_string(), "write_file".to_string()],
+            security: SecurityScope {
+                allowed_paths: vec!["*".to_string()],
+                denied_paths: vec![],
+                allowed_commands: vec!["*".to_string()],
+                read_only: false,
+                can_create_files: true,
+                network_access: false,
+            },
+            llm: ProfileLlmConfig::default(),
+            turn_limit: Some(100),
+            token_budget: Some(100_000),
+        };
+
+        AgentContext {
+            work_package_tasks,
+            relevant_decisions,
+            handoff_notes: Some("Previous session notes".to_string()),
+            agents_md_summaries: vec![("src/AGENTS.md".to_string(), "Code standards".to_string())],
+            profile,
+            project_path: PathBuf::from("/test/project"),
+            graph_store: Arc::new(TestGraphStore),
+            previous_attempt,
+            dependency_statuses,
+        }
+    }
 
     #[test]
     fn test_read_agents_md_tool_name() {
@@ -484,128 +623,6 @@ mod tests {
 
     #[test]
     fn test_build_system_prompt_output_format() {
-        use crate::agent::profile::{AgentProfile, ProfileLlmConfig};
-        use crate::graph::store::GraphStore;
-        use crate::graph::{GraphNode, NodeStatus, NodeType, Priority};
-        use crate::security::SecurityScope;
-        use anyhow::Result;
-        use async_trait::async_trait;
-        use chrono::Utc;
-        use std::collections::HashMap;
-        use std::sync::Arc;
-
-        // Minimal mock GraphStore for testing
-        struct TestGraphStore;
-
-        #[async_trait]
-        impl GraphStore for TestGraphStore {
-            async fn create_node(&self, _node: &GraphNode) -> Result<()> {
-                Ok(())
-            }
-            async fn update_node(
-                &self,
-                _id: &str,
-                _status: Option<NodeStatus>,
-                _title: Option<&str>,
-                _description: Option<&str>,
-                _blocked_reason: Option<&str>,
-                _metadata: Option<&HashMap<String, String>>,
-            ) -> Result<()> {
-                Ok(())
-            }
-            async fn get_node(&self, _id: &str) -> Result<Option<GraphNode>> {
-                Ok(None)
-            }
-            async fn query_nodes(
-                &self,
-                _query: &crate::graph::store::NodeQuery,
-            ) -> Result<Vec<GraphNode>> {
-                Ok(vec![])
-            }
-            async fn claim_task(&self, _node_id: &str, _agent_id: &str) -> Result<bool> {
-                Ok(false)
-            }
-            async fn get_ready_tasks(&self, _goal_id: &str) -> Result<Vec<GraphNode>> {
-                Ok(vec![])
-            }
-            async fn get_next_task(&self, _goal_id: &str) -> Result<Option<GraphNode>> {
-                Ok(None)
-            }
-            async fn add_edge(&self, _edge: &crate::graph::GraphEdge) -> Result<()> {
-                Ok(())
-            }
-            async fn remove_edge(&self, _edge_id: &str) -> Result<()> {
-                Ok(())
-            }
-            async fn get_edges(
-                &self,
-                _node_id: &str,
-                _direction: crate::graph::store::EdgeDirection,
-            ) -> Result<Vec<(crate::graph::GraphEdge, GraphNode)>> {
-                Ok(vec![])
-            }
-            async fn get_children(
-                &self,
-                _node_id: &str,
-            ) -> Result<Vec<(GraphNode, crate::graph::EdgeType)>> {
-                Ok(vec![])
-            }
-            async fn get_subtree(&self, _node_id: &str) -> Result<Vec<GraphNode>> {
-                Ok(vec![])
-            }
-            async fn get_active_decisions(&self, _project_id: &str) -> Result<Vec<GraphNode>> {
-                Ok(vec![])
-            }
-            async fn get_full_graph(
-                &self,
-                _goal_id: &str,
-            ) -> Result<crate::graph::store::WorkGraph> {
-                Ok(crate::graph::store::WorkGraph {
-                    nodes: vec![],
-                    edges: vec![],
-                })
-            }
-            async fn search_nodes(
-                &self,
-                _query: &str,
-                _project_id: Option<&str>,
-                _node_type: Option<NodeType>,
-                _limit: usize,
-            ) -> Result<Vec<GraphNode>> {
-                Ok(vec![])
-            }
-            async fn next_child_seq(&self, _parent_id: &str) -> Result<u32> {
-                Ok(1)
-            }
-            async fn import_nodes_and_edges(
-                &self,
-                _nodes: Vec<GraphNode>,
-                _edges: Vec<crate::graph::GraphEdge>,
-            ) -> Result<()> {
-                Ok(())
-            }
-        }
-
-        // Create mock profile
-        let profile = AgentProfile {
-            name: "test_coder".to_string(),
-            extends: None,
-            role: "You are a helpful code assistant".to_string(),
-            system_prompt: "Follow these rules carefully".to_string(),
-            allowed_tools: vec!["read_file".to_string(), "write_file".to_string()],
-            security: SecurityScope {
-                allowed_paths: vec!["*".to_string()],
-                denied_paths: vec![],
-                allowed_commands: vec!["*".to_string()],
-                read_only: false,
-                can_create_files: true,
-                network_access: false,
-            },
-            llm: ProfileLlmConfig::default(),
-            turn_limit: Some(100),
-            token_budget: Some(100_000),
-        };
-
         // Create mock work package tasks
         let mut task_metadata = HashMap::new();
         task_metadata.insert(
@@ -653,18 +670,8 @@ mod tests {
             metadata: decision_metadata,
         }];
 
-        // Create agent context
-        let ctx = AgentContext {
-            work_package_tasks,
-            relevant_decisions,
-            handoff_notes: Some("Previous session notes".to_string()),
-            agents_md_summaries: vec![("src/AGENTS.md".to_string(), "Code standards".to_string())],
-            profile,
-            project_path: PathBuf::from("/test/project"),
-            graph_store: Arc::new(TestGraphStore),
-            previous_attempt: None,
-            dependency_statuses: vec![],
-        };
+        // Create agent context using helper
+        let ctx = create_test_context(work_package_tasks, relevant_decisions, None, vec![]);
 
         // Build system prompt
         let prompt = ContextBuilder::build_system_prompt(&ctx);
@@ -732,132 +739,15 @@ mod tests {
     #[test]
     fn test_v2_phase5_ac3_1_dependency_status_done() {
         // v2-phase5.AC3.1: System prompt includes [DEP:DONE] lines for completed dependencies
-        use crate::agent::profile::AgentProfile;
-        use crate::graph::store::GraphStore;
-        use crate::graph::{GraphNode, NodeType};
-        use crate::security::SecurityScope;
-        use anyhow::Result;
-        use async_trait::async_trait;
-        use std::collections::HashMap;
-        use std::sync::Arc;
-
-        struct TestGraphStore;
-
-        #[async_trait]
-        impl GraphStore for TestGraphStore {
-            async fn create_node(&self, _node: &GraphNode) -> Result<()> {
-                Ok(())
-            }
-            async fn update_node(
-                &self,
-                _id: &str,
-                _status: Option<crate::graph::NodeStatus>,
-                _title: Option<&str>,
-                _description: Option<&str>,
-                _blocked_reason: Option<&str>,
-                _metadata: Option<&HashMap<String, String>>,
-            ) -> Result<()> {
-                Ok(())
-            }
-            async fn get_node(&self, _id: &str) -> Result<Option<GraphNode>> {
-                Ok(None)
-            }
-            async fn query_nodes(
-                &self,
-                _query: &crate::graph::store::NodeQuery,
-            ) -> Result<Vec<GraphNode>> {
-                Ok(vec![])
-            }
-            async fn claim_task(&self, _node_id: &str, _agent_id: &str) -> Result<bool> {
-                Ok(false)
-            }
-            async fn get_ready_tasks(&self, _goal_id: &str) -> Result<Vec<GraphNode>> {
-                Ok(vec![])
-            }
-            async fn get_next_task(&self, _goal_id: &str) -> Result<Option<GraphNode>> {
-                Ok(None)
-            }
-            async fn add_edge(&self, _edge: &crate::graph::GraphEdge) -> Result<()> {
-                Ok(())
-            }
-            async fn remove_edge(&self, _edge_id: &str) -> Result<()> {
-                Ok(())
-            }
-            async fn get_edges(
-                &self,
-                _node_id: &str,
-                _direction: crate::graph::store::EdgeDirection,
-            ) -> Result<Vec<(crate::graph::GraphEdge, GraphNode)>> {
-                Ok(vec![])
-            }
-            async fn get_children(
-                &self,
-                _node_id: &str,
-            ) -> Result<Vec<(GraphNode, crate::graph::EdgeType)>> {
-                Ok(vec![])
-            }
-            async fn get_subtree(&self, _node_id: &str) -> Result<Vec<GraphNode>> {
-                Ok(vec![])
-            }
-            async fn get_active_decisions(&self, _project_id: &str) -> Result<Vec<GraphNode>> {
-                Ok(vec![])
-            }
-            async fn get_full_graph(
-                &self,
-                _goal_id: &str,
-            ) -> Result<crate::graph::store::WorkGraph> {
-                Ok(crate::graph::store::WorkGraph {
-                    nodes: vec![],
-                    edges: vec![],
-                })
-            }
-            async fn search_nodes(
-                &self,
-                _query: &str,
-                _project_id: Option<&str>,
-                _node_type: Option<NodeType>,
-                _limit: usize,
-            ) -> Result<Vec<GraphNode>> {
-                Ok(vec![])
-            }
-            async fn next_child_seq(&self, _parent_id: &str) -> Result<u32> {
-                Ok(1)
-            }
-            async fn import_nodes_and_edges(
-                &self,
-                _nodes: Vec<GraphNode>,
-                _edges: Vec<crate::graph::GraphEdge>,
-            ) -> Result<()> {
-                Ok(())
-            }
-        }
-
-        let profile = AgentProfile {
-            name: "test".to_string(),
-            extends: None,
-            role: "You are a helpful code assistant".to_string(),
-            system_prompt: "Follow these rules carefully".to_string(),
-            allowed_tools: vec![],
-            security: SecurityScope::default(),
-            llm: Default::default(),
-            turn_limit: None,
-            token_budget: None,
-        };
-
-        let ctx = AgentContext {
-            work_package_tasks: vec![],
-            relevant_decisions: vec![],
-            handoff_notes: None,
-            agents_md_summaries: vec![],
-            profile,
-            project_path: PathBuf::from("/test/project"),
-            graph_store: Arc::new(TestGraphStore),
-            previous_attempt: None,
-            dependency_statuses: vec![
+        let ctx = create_test_context(
+            vec![],
+            vec![],
+            None,
+            vec![
                 ("ra-1234".to_string(), "Setup database".to_string(), true),
                 ("ra-5678".to_string(), "Configure auth".to_string(), false),
             ],
-        };
+        );
 
         let prompt = ContextBuilder::build_system_prompt(&ctx);
 
@@ -874,129 +764,12 @@ mod tests {
     #[test]
     fn test_v2_phase5_ac3_2_previous_attempt_present() {
         // v2-phase5.AC3.2: System prompt includes [PREV_ATTEMPT] section when previous_attempt is Some
-        use crate::agent::profile::AgentProfile;
-        use crate::graph::store::GraphStore;
-        use crate::graph::{GraphNode, NodeType};
-        use crate::security::SecurityScope;
-        use anyhow::Result;
-        use async_trait::async_trait;
-        use std::collections::HashMap;
-        use std::sync::Arc;
-
-        struct TestGraphStore;
-
-        #[async_trait]
-        impl GraphStore for TestGraphStore {
-            async fn create_node(&self, _node: &GraphNode) -> Result<()> {
-                Ok(())
-            }
-            async fn update_node(
-                &self,
-                _id: &str,
-                _status: Option<crate::graph::NodeStatus>,
-                _title: Option<&str>,
-                _description: Option<&str>,
-                _blocked_reason: Option<&str>,
-                _metadata: Option<&HashMap<String, String>>,
-            ) -> Result<()> {
-                Ok(())
-            }
-            async fn get_node(&self, _id: &str) -> Result<Option<GraphNode>> {
-                Ok(None)
-            }
-            async fn query_nodes(
-                &self,
-                _query: &crate::graph::store::NodeQuery,
-            ) -> Result<Vec<GraphNode>> {
-                Ok(vec![])
-            }
-            async fn claim_task(&self, _node_id: &str, _agent_id: &str) -> Result<bool> {
-                Ok(false)
-            }
-            async fn get_ready_tasks(&self, _goal_id: &str) -> Result<Vec<GraphNode>> {
-                Ok(vec![])
-            }
-            async fn get_next_task(&self, _goal_id: &str) -> Result<Option<GraphNode>> {
-                Ok(None)
-            }
-            async fn add_edge(&self, _edge: &crate::graph::GraphEdge) -> Result<()> {
-                Ok(())
-            }
-            async fn remove_edge(&self, _edge_id: &str) -> Result<()> {
-                Ok(())
-            }
-            async fn get_edges(
-                &self,
-                _node_id: &str,
-                _direction: crate::graph::store::EdgeDirection,
-            ) -> Result<Vec<(crate::graph::GraphEdge, GraphNode)>> {
-                Ok(vec![])
-            }
-            async fn get_children(
-                &self,
-                _node_id: &str,
-            ) -> Result<Vec<(GraphNode, crate::graph::EdgeType)>> {
-                Ok(vec![])
-            }
-            async fn get_subtree(&self, _node_id: &str) -> Result<Vec<GraphNode>> {
-                Ok(vec![])
-            }
-            async fn get_active_decisions(&self, _project_id: &str) -> Result<Vec<GraphNode>> {
-                Ok(vec![])
-            }
-            async fn get_full_graph(
-                &self,
-                _goal_id: &str,
-            ) -> Result<crate::graph::store::WorkGraph> {
-                Ok(crate::graph::store::WorkGraph {
-                    nodes: vec![],
-                    edges: vec![],
-                })
-            }
-            async fn search_nodes(
-                &self,
-                _query: &str,
-                _project_id: Option<&str>,
-                _node_type: Option<NodeType>,
-                _limit: usize,
-            ) -> Result<Vec<GraphNode>> {
-                Ok(vec![])
-            }
-            async fn next_child_seq(&self, _parent_id: &str) -> Result<u32> {
-                Ok(1)
-            }
-            async fn import_nodes_and_edges(
-                &self,
-                _nodes: Vec<GraphNode>,
-                _edges: Vec<crate::graph::GraphEdge>,
-            ) -> Result<()> {
-                Ok(())
-            }
-        }
-
-        let profile = AgentProfile {
-            name: "test".to_string(),
-            extends: None,
-            role: "You are a helpful code assistant".to_string(),
-            system_prompt: "Follow these rules carefully".to_string(),
-            allowed_tools: vec![],
-            security: SecurityScope::default(),
-            llm: Default::default(),
-            turn_limit: None,
-            token_budget: None,
-        };
-
-        let ctx = AgentContext {
-            work_package_tasks: vec![],
-            relevant_decisions: vec![],
-            handoff_notes: None,
-            agents_md_summaries: vec![],
-            profile,
-            project_path: PathBuf::from("/test/project"),
-            graph_store: Arc::new(TestGraphStore),
-            previous_attempt: Some("Previous attempt failed: file not found".to_string()),
-            dependency_statuses: vec![],
-        };
+        let ctx = create_test_context(
+            vec![],
+            vec![],
+            Some("Previous attempt failed: file not found".to_string()),
+            vec![],
+        );
 
         let prompt = ContextBuilder::build_system_prompt(&ctx);
 
@@ -1013,129 +786,7 @@ mod tests {
     #[test]
     fn test_v2_phase5_ac3_3_previous_attempt_absent() {
         // v2-phase5.AC3.3: System prompt omits Previous Attempt section entirely when no previous attempt exists
-        use crate::agent::profile::AgentProfile;
-        use crate::graph::store::GraphStore;
-        use crate::graph::{GraphNode, NodeType};
-        use crate::security::SecurityScope;
-        use anyhow::Result;
-        use async_trait::async_trait;
-        use std::collections::HashMap;
-        use std::sync::Arc;
-
-        struct TestGraphStore;
-
-        #[async_trait]
-        impl GraphStore for TestGraphStore {
-            async fn create_node(&self, _node: &GraphNode) -> Result<()> {
-                Ok(())
-            }
-            async fn update_node(
-                &self,
-                _id: &str,
-                _status: Option<crate::graph::NodeStatus>,
-                _title: Option<&str>,
-                _description: Option<&str>,
-                _blocked_reason: Option<&str>,
-                _metadata: Option<&HashMap<String, String>>,
-            ) -> Result<()> {
-                Ok(())
-            }
-            async fn get_node(&self, _id: &str) -> Result<Option<GraphNode>> {
-                Ok(None)
-            }
-            async fn query_nodes(
-                &self,
-                _query: &crate::graph::store::NodeQuery,
-            ) -> Result<Vec<GraphNode>> {
-                Ok(vec![])
-            }
-            async fn claim_task(&self, _node_id: &str, _agent_id: &str) -> Result<bool> {
-                Ok(false)
-            }
-            async fn get_ready_tasks(&self, _goal_id: &str) -> Result<Vec<GraphNode>> {
-                Ok(vec![])
-            }
-            async fn get_next_task(&self, _goal_id: &str) -> Result<Option<GraphNode>> {
-                Ok(None)
-            }
-            async fn add_edge(&self, _edge: &crate::graph::GraphEdge) -> Result<()> {
-                Ok(())
-            }
-            async fn remove_edge(&self, _edge_id: &str) -> Result<()> {
-                Ok(())
-            }
-            async fn get_edges(
-                &self,
-                _node_id: &str,
-                _direction: crate::graph::store::EdgeDirection,
-            ) -> Result<Vec<(crate::graph::GraphEdge, GraphNode)>> {
-                Ok(vec![])
-            }
-            async fn get_children(
-                &self,
-                _node_id: &str,
-            ) -> Result<Vec<(GraphNode, crate::graph::EdgeType)>> {
-                Ok(vec![])
-            }
-            async fn get_subtree(&self, _node_id: &str) -> Result<Vec<GraphNode>> {
-                Ok(vec![])
-            }
-            async fn get_active_decisions(&self, _project_id: &str) -> Result<Vec<GraphNode>> {
-                Ok(vec![])
-            }
-            async fn get_full_graph(
-                &self,
-                _goal_id: &str,
-            ) -> Result<crate::graph::store::WorkGraph> {
-                Ok(crate::graph::store::WorkGraph {
-                    nodes: vec![],
-                    edges: vec![],
-                })
-            }
-            async fn search_nodes(
-                &self,
-                _query: &str,
-                _project_id: Option<&str>,
-                _node_type: Option<NodeType>,
-                _limit: usize,
-            ) -> Result<Vec<GraphNode>> {
-                Ok(vec![])
-            }
-            async fn next_child_seq(&self, _parent_id: &str) -> Result<u32> {
-                Ok(1)
-            }
-            async fn import_nodes_and_edges(
-                &self,
-                _nodes: Vec<GraphNode>,
-                _edges: Vec<crate::graph::GraphEdge>,
-            ) -> Result<()> {
-                Ok(())
-            }
-        }
-
-        let profile = AgentProfile {
-            name: "test".to_string(),
-            extends: None,
-            role: "You are a helpful code assistant".to_string(),
-            system_prompt: "Follow these rules carefully".to_string(),
-            allowed_tools: vec![],
-            security: SecurityScope::default(),
-            llm: Default::default(),
-            turn_limit: None,
-            token_budget: None,
-        };
-
-        let ctx = AgentContext {
-            work_package_tasks: vec![],
-            relevant_decisions: vec![],
-            handoff_notes: None,
-            agents_md_summaries: vec![],
-            profile,
-            project_path: PathBuf::from("/test/project"),
-            graph_store: Arc::new(TestGraphStore),
-            previous_attempt: None,
-            dependency_statuses: vec![],
-        };
+        let ctx = create_test_context(vec![], vec![], None, vec![]);
 
         let prompt = ContextBuilder::build_system_prompt(&ctx);
 
@@ -1148,118 +799,6 @@ mod tests {
     #[test]
     fn test_v2_phase5_ac4_1_budget_aware_trimming() {
         // v2-phase5.AC4.1: With a very small budget, only required sections appear; optional sections are trimmed
-        use crate::agent::profile::AgentProfile;
-        use crate::graph::store::GraphStore;
-        use crate::graph::{GraphNode, NodeType};
-        use crate::security::SecurityScope;
-        use anyhow::Result;
-        use async_trait::async_trait;
-        use std::collections::HashMap;
-        use std::sync::Arc;
-
-        struct TestGraphStore;
-
-        #[async_trait]
-        impl GraphStore for TestGraphStore {
-            async fn create_node(&self, _node: &GraphNode) -> Result<()> {
-                Ok(())
-            }
-            async fn update_node(
-                &self,
-                _id: &str,
-                _status: Option<crate::graph::NodeStatus>,
-                _title: Option<&str>,
-                _description: Option<&str>,
-                _blocked_reason: Option<&str>,
-                _metadata: Option<&HashMap<String, String>>,
-            ) -> Result<()> {
-                Ok(())
-            }
-            async fn get_node(&self, _id: &str) -> Result<Option<GraphNode>> {
-                Ok(None)
-            }
-            async fn query_nodes(
-                &self,
-                _query: &crate::graph::store::NodeQuery,
-            ) -> Result<Vec<GraphNode>> {
-                Ok(vec![])
-            }
-            async fn claim_task(&self, _node_id: &str, _agent_id: &str) -> Result<bool> {
-                Ok(false)
-            }
-            async fn get_ready_tasks(&self, _goal_id: &str) -> Result<Vec<GraphNode>> {
-                Ok(vec![])
-            }
-            async fn get_next_task(&self, _goal_id: &str) -> Result<Option<GraphNode>> {
-                Ok(None)
-            }
-            async fn add_edge(&self, _edge: &crate::graph::GraphEdge) -> Result<()> {
-                Ok(())
-            }
-            async fn remove_edge(&self, _edge_id: &str) -> Result<()> {
-                Ok(())
-            }
-            async fn get_edges(
-                &self,
-                _node_id: &str,
-                _direction: crate::graph::store::EdgeDirection,
-            ) -> Result<Vec<(crate::graph::GraphEdge, GraphNode)>> {
-                Ok(vec![])
-            }
-            async fn get_children(
-                &self,
-                _node_id: &str,
-            ) -> Result<Vec<(GraphNode, crate::graph::EdgeType)>> {
-                Ok(vec![])
-            }
-            async fn get_subtree(&self, _node_id: &str) -> Result<Vec<GraphNode>> {
-                Ok(vec![])
-            }
-            async fn get_active_decisions(&self, _project_id: &str) -> Result<Vec<GraphNode>> {
-                Ok(vec![])
-            }
-            async fn get_full_graph(
-                &self,
-                _goal_id: &str,
-            ) -> Result<crate::graph::store::WorkGraph> {
-                Ok(crate::graph::store::WorkGraph {
-                    nodes: vec![],
-                    edges: vec![],
-                })
-            }
-            async fn search_nodes(
-                &self,
-                _query: &str,
-                _project_id: Option<&str>,
-                _node_type: Option<NodeType>,
-                _limit: usize,
-            ) -> Result<Vec<GraphNode>> {
-                Ok(vec![])
-            }
-            async fn next_child_seq(&self, _parent_id: &str) -> Result<u32> {
-                Ok(1)
-            }
-            async fn import_nodes_and_edges(
-                &self,
-                _nodes: Vec<GraphNode>,
-                _edges: Vec<crate::graph::GraphEdge>,
-            ) -> Result<()> {
-                Ok(())
-            }
-        }
-
-        let profile = AgentProfile {
-            name: "test".to_string(),
-            extends: None,
-            role: "You are a helpful code assistant".to_string(),
-            system_prompt: "Follow these rules carefully".to_string(),
-            allowed_tools: vec![],
-            security: SecurityScope::default(),
-            llm: Default::default(),
-            turn_limit: None,
-            token_budget: None,
-        };
-
         // Create tasks with long descriptions to trigger trimming
         let work_package_tasks = vec![GraphNode {
             id: "task-1".to_string(),
@@ -1267,12 +806,12 @@ mod tests {
             node_type: NodeType::Task,
             title: "Implement feature".to_string(),
             description: "This is a very long description that should be trimmed when budget is tight. It contains multiple sentences and spans several lines of text to ensure we have enough content to test budget trimming behavior.".to_string(),
-            status: crate::graph::NodeStatus::Ready,
-            priority: Some(crate::graph::Priority::High),
+            status: NodeStatus::Ready,
+            priority: Some(Priority::High),
             assigned_to: None,
             created_by: None,
             labels: vec![],
-            created_at: chrono::Utc::now(),
+            created_at: Utc::now(),
             started_at: None,
             completed_at: None,
             blocked_reason: None,
@@ -1286,12 +825,12 @@ mod tests {
             node_type: NodeType::Decision,
             title: "Architecture decision".to_string(),
             description: "Choose the right architecture for the system by considering scalability, maintainability, and performance requirements.".to_string(),
-            status: crate::graph::NodeStatus::Decided,
+            status: NodeStatus::Decided,
             priority: None,
             assigned_to: None,
             created_by: None,
             labels: vec![],
-            created_at: chrono::Utc::now(),
+            created_at: Utc::now(),
             started_at: None,
             completed_at: None,
             blocked_reason: None,
@@ -1302,35 +841,38 @@ mod tests {
             },
         }];
 
+        let ctx = create_test_context(work_package_tasks, relevant_decisions, None, vec![]);
+        // Override handoff_notes and agents_md_summaries for this test
         let ctx = AgentContext {
-            work_package_tasks,
-            relevant_decisions,
-            handoff_notes: Some("Previous session notes that are quite detailed and span multiple concepts".to_string()),
+            handoff_notes: Some(
+                "Previous session notes that are quite detailed and span multiple concepts"
+                    .to_string(),
+            ),
             agents_md_summaries: vec![(
                 "src/AGENTS.md".to_string(),
                 "Code standards and conventions for the project".to_string(),
             )],
-            profile,
-            project_path: PathBuf::from("/test/project"),
-            graph_store: Arc::new(TestGraphStore),
-            previous_attempt: None,
-            dependency_statuses: vec![],
+            ..ctx
         };
 
         // Test with very small budget (100 tokens - forces trimming of optional sections)
-        let small_budget = ContextBudget {
-            max_tokens: 100,
-        };
+        let small_budget = ContextBudget { max_tokens: 100 };
 
         let prompt = ContextBuilder::build_system_prompt_with_budget(&ctx, &small_budget);
 
         // Required sections should always be present
-        assert!(prompt.contains("## Role"), "Should contain Role section (required)");
+        assert!(
+            prompt.contains("## Role"),
+            "Should contain Role section (required)"
+        );
         assert!(
             prompt.contains("## Task"),
             "Should contain Task section (required)"
         );
-        assert!(prompt.contains("## Rules"), "Should contain Rules section (required)");
+        assert!(
+            prompt.contains("## Rules"),
+            "Should contain Rules section (required)"
+        );
 
         // With tiny budget, optional sections should be trimmed
         // Project Conventions is lowest priority and should be trimmed
@@ -1343,152 +885,28 @@ mod tests {
     #[test]
     fn test_v2_phase5_ac4_2_required_sections_never_trimmed() {
         // v2-phase5.AC4.2: Required sections (Role, Task, Rules) are never trimmed regardless of budget
-        use crate::agent::profile::AgentProfile;
-        use crate::graph::store::GraphStore;
-        use crate::graph::{GraphNode, NodeType};
-        use crate::security::SecurityScope;
-        use anyhow::Result;
-        use async_trait::async_trait;
-        use std::collections::HashMap;
-        use std::sync::Arc;
-
-        struct TestGraphStore;
-
-        #[async_trait]
-        impl GraphStore for TestGraphStore {
-            async fn create_node(&self, _node: &GraphNode) -> Result<()> {
-                Ok(())
-            }
-            async fn update_node(
-                &self,
-                _id: &str,
-                _status: Option<crate::graph::NodeStatus>,
-                _title: Option<&str>,
-                _description: Option<&str>,
-                _blocked_reason: Option<&str>,
-                _metadata: Option<&HashMap<String, String>>,
-            ) -> Result<()> {
-                Ok(())
-            }
-            async fn get_node(&self, _id: &str) -> Result<Option<GraphNode>> {
-                Ok(None)
-            }
-            async fn query_nodes(
-                &self,
-                _query: &crate::graph::store::NodeQuery,
-            ) -> Result<Vec<GraphNode>> {
-                Ok(vec![])
-            }
-            async fn claim_task(&self, _node_id: &str, _agent_id: &str) -> Result<bool> {
-                Ok(false)
-            }
-            async fn get_ready_tasks(&self, _goal_id: &str) -> Result<Vec<GraphNode>> {
-                Ok(vec![])
-            }
-            async fn get_next_task(&self, _goal_id: &str) -> Result<Option<GraphNode>> {
-                Ok(None)
-            }
-            async fn add_edge(&self, _edge: &crate::graph::GraphEdge) -> Result<()> {
-                Ok(())
-            }
-            async fn remove_edge(&self, _edge_id: &str) -> Result<()> {
-                Ok(())
-            }
-            async fn get_edges(
-                &self,
-                _node_id: &str,
-                _direction: crate::graph::store::EdgeDirection,
-            ) -> Result<Vec<(crate::graph::GraphEdge, GraphNode)>> {
-                Ok(vec![])
-            }
-            async fn get_children(
-                &self,
-                _node_id: &str,
-            ) -> Result<Vec<(GraphNode, crate::graph::EdgeType)>> {
-                Ok(vec![])
-            }
-            async fn get_subtree(&self, _node_id: &str) -> Result<Vec<GraphNode>> {
-                Ok(vec![])
-            }
-            async fn get_active_decisions(&self, _project_id: &str) -> Result<Vec<GraphNode>> {
-                Ok(vec![])
-            }
-            async fn get_full_graph(
-                &self,
-                _goal_id: &str,
-            ) -> Result<crate::graph::store::WorkGraph> {
-                Ok(crate::graph::store::WorkGraph {
-                    nodes: vec![],
-                    edges: vec![],
-                })
-            }
-            async fn search_nodes(
-                &self,
-                _query: &str,
-                _project_id: Option<&str>,
-                _node_type: Option<NodeType>,
-                _limit: usize,
-            ) -> Result<Vec<GraphNode>> {
-                Ok(vec![])
-            }
-            async fn next_child_seq(&self, _parent_id: &str) -> Result<u32> {
-                Ok(1)
-            }
-            async fn import_nodes_and_edges(
-                &self,
-                _nodes: Vec<GraphNode>,
-                _edges: Vec<crate::graph::GraphEdge>,
-            ) -> Result<()> {
-                Ok(())
-            }
-        }
-
-        let profile = AgentProfile {
-            name: "test".to_string(),
-            extends: None,
-            role: "You are a helpful code assistant".to_string(),
-            system_prompt: "Follow these rules carefully".to_string(),
-            allowed_tools: vec![],
-            security: SecurityScope::default(),
-            llm: Default::default(),
-            turn_limit: None,
-            token_budget: None,
-        };
-
         let work_package_tasks = vec![GraphNode {
             id: "task-1".to_string(),
             project_id: "proj-1".to_string(),
             node_type: NodeType::Task,
             title: "Implement feature".to_string(),
             description: "A detailed implementation task".to_string(),
-            status: crate::graph::NodeStatus::Ready,
-            priority: Some(crate::graph::Priority::High),
+            status: NodeStatus::Ready,
+            priority: Some(Priority::High),
             assigned_to: None,
             created_by: None,
             labels: vec![],
-            created_at: chrono::Utc::now(),
+            created_at: Utc::now(),
             started_at: None,
             completed_at: None,
             blocked_reason: None,
             metadata: HashMap::new(),
         }];
 
-        let ctx = AgentContext {
-            work_package_tasks,
-            relevant_decisions: vec![],
-            handoff_notes: None,
-            agents_md_summaries: vec![],
-            profile,
-            project_path: PathBuf::from("/test/project"),
-            graph_store: Arc::new(TestGraphStore),
-            previous_attempt: None,
-            dependency_statuses: vec![],
-        };
+        let ctx = create_test_context(work_package_tasks, vec![], None, vec![]);
 
         // Test with extremely small budget (10 tokens - smaller than required sections)
-        let tiny_budget = ContextBudget {
-            max_tokens: 10,
-        };
+        let tiny_budget = ContextBudget { max_tokens: 10 };
 
         let prompt = ContextBuilder::build_system_prompt_with_budget(&ctx, &tiny_budget);
 
@@ -1510,7 +928,10 @@ mod tests {
     #[test]
     fn test_context_budget_default() {
         let budget = ContextBudget::default();
-        assert_eq!(budget.max_tokens, 4000, "Default budget should be 4000 tokens");
+        assert_eq!(
+            budget.max_tokens, 4000,
+            "Default budget should be 4000 tokens"
+        );
     }
 
     #[test]

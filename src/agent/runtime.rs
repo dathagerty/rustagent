@@ -1,5 +1,5 @@
 use crate::agent::{AgentContext, AgentId, AgentOutcome, AgentProfile};
-use crate::context::{ContextBuilder, ContextBudget};
+use crate::context::{ContextBudget, ContextBuilder};
 use crate::llm::{LlmClient, Message, ResponseContent};
 use crate::message::{MessageBus, WorkerMessage};
 use crate::tools::ToolRegistry;
