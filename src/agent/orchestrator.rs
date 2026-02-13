@@ -1154,7 +1154,7 @@ impl Orchestrator {
                                 Some(NodeStatus::Ready),
                                 None,                // title unchanged
                                 None,                // description unchanged
-                                None,                // clear blocked_reason
+                                Some(""),            // clear blocked_reason by setting to empty string
                                 Some(&metadata),     // metadata with blocker_task_id removed
                             )
                             .await?;
