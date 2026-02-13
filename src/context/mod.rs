@@ -120,7 +120,7 @@ impl Tool for ReadAgentsMdTool {
             "properties": {
                 "path": {
                     "type": "string",
-                    "description": "Path to the AGENTS.md file to read"
+                    "description": "Path to the AGENTS.md file or a directory containing AGENTS.md"
                 }
             },
             "required": ["path"]
@@ -144,6 +144,11 @@ impl Tool for ReadAgentsMdTool {
                 ));
             }
             path_buf
+        } else if path_buf.extension().is_some() {
+            // If path has a file extension but is not AGENTS.md, reject it explicitly
+            return Err(anyhow::anyhow!(
+                "read_agents_md can only read AGENTS.md files"
+            ));
         } else {
             // Treat as directory and append /AGENTS.md
             path_buf.join("AGENTS.md")
@@ -230,7 +235,10 @@ mod tests {
     async fn test_read_agents_md_tool_with_directory_path() -> Result<()> {
         let tmpdir = tempfile::TempDir::new()?;
         // Create AGENTS.md in the directory
-        std::fs::write(tmpdir.path().join("AGENTS.md"), "# Test Guidelines\n\nContent")?;
+        std::fs::write(
+            tmpdir.path().join("AGENTS.md"),
+            "# Test Guidelines\n\nContent",
+        )?;
 
         let tool = ReadAgentsMdTool::new();
         let result = tool
@@ -272,7 +280,12 @@ mod tests {
             .await;
 
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("failed to read"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("read_agents_md can only read AGENTS.md files")
+        );
     }
 
     #[tokio::test]
