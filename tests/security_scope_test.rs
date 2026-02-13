@@ -10,15 +10,21 @@ fn test_planner_profile_readonly_scope() {
     assert!(!profile.security.can_create_files);
 
     // Should deny writes
-    let result = profile.security.check_path("src/main.rs", FileOperation::Write);
+    let result = profile
+        .security
+        .check_path("src/main.rs", FileOperation::Write);
     assert_eq!(result, ScopeCheck::Denied("read-only scope".to_string()));
 
     // Should allow reads
-    let result = profile.security.check_path("src/main.rs", FileOperation::Read);
+    let result = profile
+        .security
+        .check_path("src/main.rs", FileOperation::Read);
     assert_eq!(result, ScopeCheck::Allowed);
 
     // Should deny file creation (read-only takes precedence)
-    let result = profile.security.check_path("src/newfile.rs", FileOperation::Create);
+    let result = profile
+        .security
+        .check_path("src/newfile.rs", FileOperation::Create);
     assert!(matches!(result, ScopeCheck::Denied(_)));
 }
 
@@ -31,15 +37,21 @@ fn test_coder_profile_writable_scope() {
     assert!(profile.security.can_create_files);
 
     // Should allow writes
-    let result = profile.security.check_path("src/main.rs", FileOperation::Write);
+    let result = profile
+        .security
+        .check_path("src/main.rs", FileOperation::Write);
     assert_eq!(result, ScopeCheck::Allowed);
 
     // Should allow reads
-    let result = profile.security.check_path("src/main.rs", FileOperation::Read);
+    let result = profile
+        .security
+        .check_path("src/main.rs", FileOperation::Read);
     assert_eq!(result, ScopeCheck::Allowed);
 
     // Should allow file creation
-    let result = profile.security.check_path("src/newfile.rs", FileOperation::Create);
+    let result = profile
+        .security
+        .check_path("src/newfile.rs", FileOperation::Create);
     assert_eq!(result, ScopeCheck::Allowed);
 }
 
@@ -65,11 +77,15 @@ fn test_reviewer_profile_readonly_scope() {
     assert!(!profile.security.can_create_files);
 
     // Should deny writes
-    let result = profile.security.check_path("src/main.rs", FileOperation::Write);
+    let result = profile
+        .security
+        .check_path("src/main.rs", FileOperation::Write);
     assert_eq!(result, ScopeCheck::Denied("read-only scope".to_string()));
 
     // Should allow reads
-    let result = profile.security.check_path("src/main.rs", FileOperation::Read);
+    let result = profile
+        .security
+        .check_path("src/main.rs", FileOperation::Read);
     assert_eq!(result, ScopeCheck::Allowed);
 }
 
@@ -82,11 +98,15 @@ fn test_researcher_profile_readonly_scope() {
     assert!(!profile.security.can_create_files);
 
     // Should deny writes
-    let result = profile.security.check_path("src/main.rs", FileOperation::Write);
+    let result = profile
+        .security
+        .check_path("src/main.rs", FileOperation::Write);
     assert_eq!(result, ScopeCheck::Denied("read-only scope".to_string()));
 
     // Should allow reads
-    let result = profile.security.check_path("src/main.rs", FileOperation::Read);
+    let result = profile
+        .security
+        .check_path("src/main.rs", FileOperation::Read);
     assert_eq!(result, ScopeCheck::Allowed);
 }
 
@@ -99,11 +119,15 @@ fn test_tester_profile_writable_scope() {
     assert!(profile.security.can_create_files);
 
     // Should allow writes
-    let result = profile.security.check_path("tests/test.rs", FileOperation::Write);
+    let result = profile
+        .security
+        .check_path("tests/test.rs", FileOperation::Write);
     assert_eq!(result, ScopeCheck::Allowed);
 
     // Should allow file creation
-    let result = profile.security.check_path("tests/newtest.rs", FileOperation::Create);
+    let result = profile
+        .security
+        .check_path("tests/newtest.rs", FileOperation::Create);
     assert_eq!(result, ScopeCheck::Allowed);
 }
 

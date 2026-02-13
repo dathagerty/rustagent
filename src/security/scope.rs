@@ -81,7 +81,10 @@ impl SecurityScope {
         for pattern_str in &self.denied_paths {
             if let Ok(pattern) = Pattern::new(pattern_str) {
                 if pattern.matches_path_with(path_ref, opts) {
-                    return ScopeCheck::Denied(format!("path matches denied pattern: {}", pattern_str));
+                    return ScopeCheck::Denied(format!(
+                        "path matches denied pattern: {}",
+                        pattern_str
+                    ));
                 }
             }
         }
@@ -203,7 +206,10 @@ mod tests {
 
         // Create operation should be blocked when can_create_files is false
         let result = scope.check_path("src/newfile.rs", FileOperation::Create);
-        assert_eq!(result, ScopeCheck::Denied("file creation not allowed".to_string()));
+        assert_eq!(
+            result,
+            ScopeCheck::Denied("file creation not allowed".to_string())
+        );
     }
 
     #[test]
@@ -265,7 +271,9 @@ mod tests {
         };
 
         let result = scope.check_path("tests/something.rs", FileOperation::Read);
-        assert!(matches!(result, ScopeCheck::Denied(ref msg) if msg.contains("path not in allowed patterns")));
+        assert!(
+            matches!(result, ScopeCheck::Denied(ref msg) if msg.contains("path not in allowed patterns"))
+        );
     }
 
     // ============ check_command tests ============
@@ -297,7 +305,9 @@ mod tests {
         };
 
         let result = scope.check_command("rm -rf /");
-        assert!(matches!(result, ScopeCheck::Denied(ref msg) if msg.contains("command not in allowed patterns")));
+        assert!(
+            matches!(result, ScopeCheck::Denied(ref msg) if msg.contains("command not in allowed patterns"))
+        );
     }
 
     #[test]
@@ -360,6 +370,9 @@ mod tests {
         };
 
         let result = scope.check_network();
-        assert_eq!(result, ScopeCheck::Denied("network access not allowed".to_string()));
+        assert_eq!(
+            result,
+            ScopeCheck::Denied("network access not allowed".to_string())
+        );
     }
 }
