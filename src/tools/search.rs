@@ -70,7 +70,7 @@ impl Tool for CodeSearchTool {
 
         // Compile glob pattern if provided
         let glob_pattern = file_glob
-            .map(|g| Pattern::new(g))
+            .map(Pattern::new)
             .transpose()
             .context("Invalid glob pattern")?;
 
