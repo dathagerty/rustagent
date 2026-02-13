@@ -52,7 +52,13 @@ pub fn resolve_agents_md(
                     .map(|(heading, count)| format!("{} ({} lines)", heading, count))
                     .collect::<Vec<_>>()
                     .join(", ");
-                let path_str = agents_md_path.to_string_lossy().to_string();
+
+                // Convert to relative path from project root
+                let path_str = agents_md_path
+                    .strip_prefix(project_root)
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_else(|_| agents_md_path.to_string_lossy().to_string());
+
                 summaries.push((path_str, heading_summary));
             }
         }
@@ -182,8 +188,9 @@ mod tests {
 
         // Should have both files, with src/AGENTS.md first (closest to file)
         assert_eq!(summaries.len(), 2);
-        assert!(summaries[0].0.contains("src/AGENTS.md"));
-        assert!(summaries[1].0.contains("AGENTS.md"));
+        // Paths should be relative, not absolute
+        assert_eq!(summaries[0].0, "src/AGENTS.md");
+        assert_eq!(summaries[1].0, "AGENTS.md");
         Ok(())
     }
 
@@ -235,9 +242,10 @@ mod tests {
 
         // Should have all three AGENTS.md files, in order: closest to file first
         assert_eq!(summaries.len(), 3);
-        assert!(summaries[0].0.contains("src/auth/AGENTS.md"));
-        assert!(summaries[1].0.contains("src/AGENTS.md"));
-        assert!(summaries[2].0.contains("AGENTS.md"));
+        // Paths should be relative, not absolute
+        assert_eq!(summaries[0].0, "src/auth/AGENTS.md");
+        assert_eq!(summaries[1].0, "src/AGENTS.md");
+        assert_eq!(summaries[2].0, "AGENTS.md");
         Ok(())
     }
 }
