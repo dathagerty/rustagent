@@ -7,9 +7,9 @@ use crate::agent::work_package::{
 use crate::agent::worktree::WorktreeManager;
 use crate::agent::{AgentContext, AgentId, AgentOutcome};
 use crate::context::resolve_agents_md;
-use crate::graph::store::{GraphStore, NodeQuery};
+use crate::graph::store::{EdgeDirection, GraphStore, NodeQuery};
 use crate::graph::{
-    GraphNode, NodeStatus, NodeType, Priority, generate_child_id, generate_goal_id,
+    EdgeType, GraphNode, NodeStatus, NodeType, Priority, generate_child_id, generate_goal_id,
 };
 use crate::llm::LlmClient;
 use crate::message::{MessageBus, WorkerMessage};
@@ -428,6 +428,9 @@ impl Orchestrator {
             .ok_or_else(|| anyhow!("no goal_id set in Scheduling state"))?
             .clone();
 
+        // Check for blocked tasks that can be unblocked
+        self.try_unblock_tasks(&goal_id).await?;
+
         // Check goal-level token budget
         if let Some(max) = self.config.max_tokens_per_goal
             && self.cumulative_tokens >= max
@@ -787,6 +790,10 @@ impl Orchestrator {
             };
 
         // Build AgentContext
+        let previous_attempt = task_nodes
+            .first()
+            .and_then(|t| t.metadata.get("previous_attempt").cloned());
+
         let ctx = AgentContext {
             work_package_tasks: task_nodes,
             relevant_decisions: decisions,
@@ -795,7 +802,7 @@ impl Orchestrator {
             profile: profile.clone(),
             project_path: worker_project_path,
             graph_store: self.graph_store.clone(),
-            previous_attempt: None,
+            previous_attempt,
             dependency_statuses: vec![],
         };
 
@@ -1042,9 +1049,10 @@ impl Orchestrator {
             .unwrap_or(0);
 
         if retry_count < self.config.max_retries_per_task {
-            // Retry: increment count and reset to Ready
+            // Retry: increment count, store error in metadata, and reset to Ready
             let mut metadata = node.map(|n| n.metadata.clone()).unwrap_or_default();
             metadata.insert("retry_count".to_string(), (retry_count + 1).to_string());
+            metadata.insert("previous_attempt".to_string(), error.to_string());
 
             self.graph_store
                 .update_node(
@@ -1101,12 +1109,107 @@ impl Orchestrator {
                 let _ = self.graph_store.create_node(&obs).await;
             }
 
+            // Cascade failure: find downstream tasks that DependsOn this failed task
+            self.cascade_block_to_dependents(task_id).await?;
+
             tracing::warn!(
                 task = %task_id,
                 retries = retry_count,
                 "Task permanently failed: {}",
                 error
             );
+        }
+
+        Ok(())
+    }
+
+    /// Check all Blocked tasks under a goal and unblock any whose blockers have resolved.
+    /// Uses `metadata["blocker_task_id"]` (set by `cascade_block_to_dependents`) to
+    /// reliably identify which task is the blocker — no string parsing of blocked_reason.
+    async fn try_unblock_tasks(&self, _goal_id: &str) -> Result<()> {
+        let blocked_tasks = self.graph_store
+            .query_nodes(&NodeQuery {
+                node_type: Some(NodeType::Task),
+                status: Some(NodeStatus::Blocked),
+                project_id: Some(self.project_id.clone()),
+                parent_id: None,
+                query: None,
+            })
+            .await?;
+
+        for task in &blocked_tasks {
+            // Look up blocker task ID from metadata (set during cascade)
+            if let Some(blocker_id) = task.metadata.get("blocker_task_id") {
+                if let Some(blocker) = self.graph_store.get_node(blocker_id).await? {
+                    // If the blocker has been retried and is now completed, unblock
+                    if blocker.status == NodeStatus::Completed {
+                        // Remove blocker_task_id from metadata when unblocking
+                        let mut metadata = task.metadata.clone();
+                        metadata.remove("blocker_task_id");
+
+                        self.graph_store
+                            .update_node(
+                                &task.id,
+                                Some(NodeStatus::Ready),
+                                None,                // title unchanged
+                                None,                // description unchanged
+                                None,                // clear blocked_reason
+                                Some(&metadata),     // metadata with blocker_task_id removed
+                            )
+                            .await?;
+
+                        tracing::info!(
+                            task = %task.id,
+                            blocker = %blocker_id,
+                            "Task unblocked: dependency resolved"
+                        );
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Mark all tasks that directly depend on `blocker_id` as Blocked.
+    /// Stores the blocker task ID in each blocked task's metadata under key
+    /// `"blocker_task_id"` for reliable lookup during unblock checks.
+    async fn cascade_block_to_dependents(&self, blocker_id: &str) -> Result<()> {
+        // DependsOn edge direction: if B DependsOn A, edge is from=B, to=A.
+        // So get_edges(A, Incoming) finds edges where to_node=A, returning
+        // the related from_node (B) — i.e., all tasks that depend on A.
+        let edges = self.graph_store
+            .get_edges(blocker_id, EdgeDirection::Incoming)
+            .await?;
+
+        let reason = format!("blocked by failed task {}", blocker_id);
+
+        for (edge, node) in edges {
+            if edge.edge_type == EdgeType::DependsOn
+                && node.node_type == NodeType::Task
+                && !matches!(node.status, NodeStatus::Completed | NodeStatus::Failed | NodeStatus::Cancelled)
+            {
+                // Store blocker ID in metadata for reliable lookup during unblock
+                let mut metadata = node.metadata.clone();
+                metadata.insert("blocker_task_id".to_string(), blocker_id.to_string());
+
+                self.graph_store
+                    .update_node(
+                        &node.id,
+                        Some(NodeStatus::Blocked),
+                        None,                // title unchanged
+                        None,                // description unchanged
+                        Some(&reason),       // blocked_reason
+                        Some(&metadata),     // metadata with blocker_task_id
+                    )
+                    .await?;
+
+                tracing::info!(
+                    task = %node.id,
+                    blocker = %blocker_id,
+                    "Task blocked due to dependency failure"
+                );
+            }
         }
 
         Ok(())

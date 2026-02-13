@@ -85,5 +85,6 @@ pub mod factory;
 pub mod file;
 pub mod graph_tools;
 pub mod permission_check;
+pub mod search;
 pub mod shell;
 pub mod signal;
