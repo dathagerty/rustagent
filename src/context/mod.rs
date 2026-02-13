@@ -44,6 +44,23 @@ impl ContextBuilder {
             prompt.push('\n');
         }
 
+        // Dependency status section
+        if !ctx.dependency_statuses.is_empty() {
+            for (id, title, is_done) in &ctx.dependency_statuses {
+                if *is_done {
+                    prompt.push_str(&format!("[DEP:DONE] {} → {} (completed)\n", id, title));
+                } else {
+                    prompt.push_str(&format!("[DEP:PENDING] {} → {} (pending)\n", id, title));
+                }
+            }
+        }
+
+        // Previous attempt section
+        if let Some(prev) = &ctx.previous_attempt {
+            prompt.push_str("\n## Previous Attempt\n");
+            prompt.push_str(&format!("[PREV_ATTEMPT] {}\n\n", prev));
+        }
+
         // Session continuity - handoff notes
         if let Some(handoff) = &ctx.handoff_notes {
             prompt.push_str("## Session Continuity\n");
@@ -547,6 +564,422 @@ mod tests {
         assert!(
             prompt.contains("Follow these rules carefully"),
             "Should contain system prompt rules"
+        );
+    }
+
+    #[test]
+    fn test_v2_phase5_ac3_1_dependency_status_done() {
+        // v2-phase5.AC3.1: System prompt includes [DEP:DONE] lines for completed dependencies
+        use crate::agent::profile::AgentProfile;
+        use crate::graph::store::GraphStore;
+        use crate::graph::{GraphNode, NodeType};
+        use crate::security::SecurityScope;
+        use anyhow::Result;
+        use async_trait::async_trait;
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        struct TestGraphStore;
+
+        #[async_trait]
+        impl GraphStore for TestGraphStore {
+            async fn create_node(&self, _node: &GraphNode) -> Result<()> {
+                Ok(())
+            }
+            async fn update_node(
+                &self,
+                _id: &str,
+                _status: Option<crate::graph::NodeStatus>,
+                _title: Option<&str>,
+                _description: Option<&str>,
+                _blocked_reason: Option<&str>,
+                _metadata: Option<&HashMap<String, String>>,
+            ) -> Result<()> {
+                Ok(())
+            }
+            async fn get_node(&self, _id: &str) -> Result<Option<GraphNode>> {
+                Ok(None)
+            }
+            async fn query_nodes(
+                &self,
+                _query: &crate::graph::store::NodeQuery,
+            ) -> Result<Vec<GraphNode>> {
+                Ok(vec![])
+            }
+            async fn claim_task(&self, _node_id: &str, _agent_id: &str) -> Result<bool> {
+                Ok(false)
+            }
+            async fn get_ready_tasks(&self, _goal_id: &str) -> Result<Vec<GraphNode>> {
+                Ok(vec![])
+            }
+            async fn get_next_task(&self, _goal_id: &str) -> Result<Option<GraphNode>> {
+                Ok(None)
+            }
+            async fn add_edge(&self, _edge: &crate::graph::GraphEdge) -> Result<()> {
+                Ok(())
+            }
+            async fn remove_edge(&self, _edge_id: &str) -> Result<()> {
+                Ok(())
+            }
+            async fn get_edges(
+                &self,
+                _node_id: &str,
+                _direction: crate::graph::store::EdgeDirection,
+            ) -> Result<Vec<(crate::graph::GraphEdge, GraphNode)>> {
+                Ok(vec![])
+            }
+            async fn get_children(
+                &self,
+                _node_id: &str,
+            ) -> Result<Vec<(GraphNode, crate::graph::EdgeType)>> {
+                Ok(vec![])
+            }
+            async fn get_subtree(&self, _node_id: &str) -> Result<Vec<GraphNode>> {
+                Ok(vec![])
+            }
+            async fn get_active_decisions(&self, _project_id: &str) -> Result<Vec<GraphNode>> {
+                Ok(vec![])
+            }
+            async fn get_full_graph(
+                &self,
+                _goal_id: &str,
+            ) -> Result<crate::graph::store::WorkGraph> {
+                Ok(crate::graph::store::WorkGraph {
+                    nodes: vec![],
+                    edges: vec![],
+                })
+            }
+            async fn search_nodes(
+                &self,
+                _query: &str,
+                _project_id: Option<&str>,
+                _node_type: Option<NodeType>,
+                _limit: usize,
+            ) -> Result<Vec<GraphNode>> {
+                Ok(vec![])
+            }
+            async fn next_child_seq(&self, _parent_id: &str) -> Result<u32> {
+                Ok(1)
+            }
+            async fn import_nodes_and_edges(
+                &self,
+                _nodes: Vec<GraphNode>,
+                _edges: Vec<crate::graph::GraphEdge>,
+            ) -> Result<()> {
+                Ok(())
+            }
+        }
+
+        let profile = AgentProfile {
+            name: "test".to_string(),
+            extends: None,
+            role: "You are a helpful code assistant".to_string(),
+            system_prompt: "Follow these rules carefully".to_string(),
+            allowed_tools: vec![],
+            security: SecurityScope::default(),
+            llm: Default::default(),
+            turn_limit: None,
+            token_budget: None,
+        };
+
+        let ctx = AgentContext {
+            work_package_tasks: vec![],
+            relevant_decisions: vec![],
+            handoff_notes: None,
+            agents_md_summaries: vec![],
+            profile,
+            project_path: PathBuf::from("/test/project"),
+            graph_store: Arc::new(TestGraphStore),
+            previous_attempt: None,
+            dependency_statuses: vec![
+                ("ra-1234".to_string(), "Setup database".to_string(), true),
+                ("ra-5678".to_string(), "Configure auth".to_string(), false),
+            ],
+        };
+
+        let prompt = ContextBuilder::build_system_prompt(&ctx);
+
+        assert!(
+            prompt.contains("[DEP:DONE] ra-1234 → Setup database (completed)"),
+            "Should contain completed dependency with [DEP:DONE]"
+        );
+        assert!(
+            prompt.contains("[DEP:PENDING] ra-5678 → Configure auth (pending)"),
+            "Should contain pending dependency with [DEP:PENDING]"
+        );
+    }
+
+    #[test]
+    fn test_v2_phase5_ac3_2_previous_attempt_present() {
+        // v2-phase5.AC3.2: System prompt includes [PREV_ATTEMPT] section when previous_attempt is Some
+        use crate::agent::profile::AgentProfile;
+        use crate::graph::store::GraphStore;
+        use crate::graph::{GraphNode, NodeType};
+        use crate::security::SecurityScope;
+        use anyhow::Result;
+        use async_trait::async_trait;
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        struct TestGraphStore;
+
+        #[async_trait]
+        impl GraphStore for TestGraphStore {
+            async fn create_node(&self, _node: &GraphNode) -> Result<()> {
+                Ok(())
+            }
+            async fn update_node(
+                &self,
+                _id: &str,
+                _status: Option<crate::graph::NodeStatus>,
+                _title: Option<&str>,
+                _description: Option<&str>,
+                _blocked_reason: Option<&str>,
+                _metadata: Option<&HashMap<String, String>>,
+            ) -> Result<()> {
+                Ok(())
+            }
+            async fn get_node(&self, _id: &str) -> Result<Option<GraphNode>> {
+                Ok(None)
+            }
+            async fn query_nodes(
+                &self,
+                _query: &crate::graph::store::NodeQuery,
+            ) -> Result<Vec<GraphNode>> {
+                Ok(vec![])
+            }
+            async fn claim_task(&self, _node_id: &str, _agent_id: &str) -> Result<bool> {
+                Ok(false)
+            }
+            async fn get_ready_tasks(&self, _goal_id: &str) -> Result<Vec<GraphNode>> {
+                Ok(vec![])
+            }
+            async fn get_next_task(&self, _goal_id: &str) -> Result<Option<GraphNode>> {
+                Ok(None)
+            }
+            async fn add_edge(&self, _edge: &crate::graph::GraphEdge) -> Result<()> {
+                Ok(())
+            }
+            async fn remove_edge(&self, _edge_id: &str) -> Result<()> {
+                Ok(())
+            }
+            async fn get_edges(
+                &self,
+                _node_id: &str,
+                _direction: crate::graph::store::EdgeDirection,
+            ) -> Result<Vec<(crate::graph::GraphEdge, GraphNode)>> {
+                Ok(vec![])
+            }
+            async fn get_children(
+                &self,
+                _node_id: &str,
+            ) -> Result<Vec<(GraphNode, crate::graph::EdgeType)>> {
+                Ok(vec![])
+            }
+            async fn get_subtree(&self, _node_id: &str) -> Result<Vec<GraphNode>> {
+                Ok(vec![])
+            }
+            async fn get_active_decisions(&self, _project_id: &str) -> Result<Vec<GraphNode>> {
+                Ok(vec![])
+            }
+            async fn get_full_graph(
+                &self,
+                _goal_id: &str,
+            ) -> Result<crate::graph::store::WorkGraph> {
+                Ok(crate::graph::store::WorkGraph {
+                    nodes: vec![],
+                    edges: vec![],
+                })
+            }
+            async fn search_nodes(
+                &self,
+                _query: &str,
+                _project_id: Option<&str>,
+                _node_type: Option<NodeType>,
+                _limit: usize,
+            ) -> Result<Vec<GraphNode>> {
+                Ok(vec![])
+            }
+            async fn next_child_seq(&self, _parent_id: &str) -> Result<u32> {
+                Ok(1)
+            }
+            async fn import_nodes_and_edges(
+                &self,
+                _nodes: Vec<GraphNode>,
+                _edges: Vec<crate::graph::GraphEdge>,
+            ) -> Result<()> {
+                Ok(())
+            }
+        }
+
+        let profile = AgentProfile {
+            name: "test".to_string(),
+            extends: None,
+            role: "You are a helpful code assistant".to_string(),
+            system_prompt: "Follow these rules carefully".to_string(),
+            allowed_tools: vec![],
+            security: SecurityScope::default(),
+            llm: Default::default(),
+            turn_limit: None,
+            token_budget: None,
+        };
+
+        let ctx = AgentContext {
+            work_package_tasks: vec![],
+            relevant_decisions: vec![],
+            handoff_notes: None,
+            agents_md_summaries: vec![],
+            profile,
+            project_path: PathBuf::from("/test/project"),
+            graph_store: Arc::new(TestGraphStore),
+            previous_attempt: Some("Previous attempt failed: file not found".to_string()),
+            dependency_statuses: vec![],
+        };
+
+        let prompt = ContextBuilder::build_system_prompt(&ctx);
+
+        assert!(
+            prompt.contains("## Previous Attempt"),
+            "Should contain Previous Attempt section when previous_attempt is Some"
+        );
+        assert!(
+            prompt.contains("[PREV_ATTEMPT] Previous attempt failed: file not found"),
+            "Should contain previous attempt details with [PREV_ATTEMPT] marker"
+        );
+    }
+
+    #[test]
+    fn test_v2_phase5_ac3_3_previous_attempt_absent() {
+        // v2-phase5.AC3.3: System prompt omits Previous Attempt section entirely when no previous attempt exists
+        use crate::agent::profile::AgentProfile;
+        use crate::graph::store::GraphStore;
+        use crate::graph::{GraphNode, NodeType};
+        use crate::security::SecurityScope;
+        use anyhow::Result;
+        use async_trait::async_trait;
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        struct TestGraphStore;
+
+        #[async_trait]
+        impl GraphStore for TestGraphStore {
+            async fn create_node(&self, _node: &GraphNode) -> Result<()> {
+                Ok(())
+            }
+            async fn update_node(
+                &self,
+                _id: &str,
+                _status: Option<crate::graph::NodeStatus>,
+                _title: Option<&str>,
+                _description: Option<&str>,
+                _blocked_reason: Option<&str>,
+                _metadata: Option<&HashMap<String, String>>,
+            ) -> Result<()> {
+                Ok(())
+            }
+            async fn get_node(&self, _id: &str) -> Result<Option<GraphNode>> {
+                Ok(None)
+            }
+            async fn query_nodes(
+                &self,
+                _query: &crate::graph::store::NodeQuery,
+            ) -> Result<Vec<GraphNode>> {
+                Ok(vec![])
+            }
+            async fn claim_task(&self, _node_id: &str, _agent_id: &str) -> Result<bool> {
+                Ok(false)
+            }
+            async fn get_ready_tasks(&self, _goal_id: &str) -> Result<Vec<GraphNode>> {
+                Ok(vec![])
+            }
+            async fn get_next_task(&self, _goal_id: &str) -> Result<Option<GraphNode>> {
+                Ok(None)
+            }
+            async fn add_edge(&self, _edge: &crate::graph::GraphEdge) -> Result<()> {
+                Ok(())
+            }
+            async fn remove_edge(&self, _edge_id: &str) -> Result<()> {
+                Ok(())
+            }
+            async fn get_edges(
+                &self,
+                _node_id: &str,
+                _direction: crate::graph::store::EdgeDirection,
+            ) -> Result<Vec<(crate::graph::GraphEdge, GraphNode)>> {
+                Ok(vec![])
+            }
+            async fn get_children(
+                &self,
+                _node_id: &str,
+            ) -> Result<Vec<(GraphNode, crate::graph::EdgeType)>> {
+                Ok(vec![])
+            }
+            async fn get_subtree(&self, _node_id: &str) -> Result<Vec<GraphNode>> {
+                Ok(vec![])
+            }
+            async fn get_active_decisions(&self, _project_id: &str) -> Result<Vec<GraphNode>> {
+                Ok(vec![])
+            }
+            async fn get_full_graph(
+                &self,
+                _goal_id: &str,
+            ) -> Result<crate::graph::store::WorkGraph> {
+                Ok(crate::graph::store::WorkGraph {
+                    nodes: vec![],
+                    edges: vec![],
+                })
+            }
+            async fn search_nodes(
+                &self,
+                _query: &str,
+                _project_id: Option<&str>,
+                _node_type: Option<NodeType>,
+                _limit: usize,
+            ) -> Result<Vec<GraphNode>> {
+                Ok(vec![])
+            }
+            async fn next_child_seq(&self, _parent_id: &str) -> Result<u32> {
+                Ok(1)
+            }
+            async fn import_nodes_and_edges(
+                &self,
+                _nodes: Vec<GraphNode>,
+                _edges: Vec<crate::graph::GraphEdge>,
+            ) -> Result<()> {
+                Ok(())
+            }
+        }
+
+        let profile = AgentProfile {
+            name: "test".to_string(),
+            extends: None,
+            role: "You are a helpful code assistant".to_string(),
+            system_prompt: "Follow these rules carefully".to_string(),
+            allowed_tools: vec![],
+            security: SecurityScope::default(),
+            llm: Default::default(),
+            turn_limit: None,
+            token_budget: None,
+        };
+
+        let ctx = AgentContext {
+            work_package_tasks: vec![],
+            relevant_decisions: vec![],
+            handoff_notes: None,
+            agents_md_summaries: vec![],
+            profile,
+            project_path: PathBuf::from("/test/project"),
+            graph_store: Arc::new(TestGraphStore),
+            previous_attempt: None,
+            dependency_statuses: vec![],
+        };
+
+        let prompt = ContextBuilder::build_system_prompt(&ctx);
+
+        assert!(
+            !prompt.contains("## Previous Attempt"),
+            "Should NOT contain Previous Attempt section when previous_attempt is None"
         );
     }
 }
