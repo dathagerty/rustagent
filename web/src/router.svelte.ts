@@ -120,27 +120,29 @@ export function navigate(path: string): void {
 
 /**
  * Initialize the router and listen for hash changes.
- * The $effect handles setup and cleanup automatically.
+ * Must be called from within a component's reactive context (e.g., App.svelte).
  */
-$effect(() => {
-  const handler = () => {
-    // Parse the hash and update routerState
-    let hash = window.location.hash;
-    // Remove leading '#'
-    if (hash.startsWith('#')) {
-      hash = hash.slice(1);
-    }
-    routerState.path = hash === '' ? '/' : hash;
-  };
+export function initRouter(): void {
+  $effect(() => {
+    const handler = () => {
+      // Parse the hash and update routerState
+      let hash = window.location.hash;
+      // Remove leading '#'
+      if (hash.startsWith('#')) {
+        hash = hash.slice(1);
+      }
+      routerState.path = hash === '' ? '/' : hash;
+    };
 
-  // Parse current hash on init
-  handler();
+    // Parse current hash on init
+    handler();
 
-  // Listen for hash changes
-  window.addEventListener('hashchange', handler);
+    // Listen for hash changes
+    window.addEventListener('hashchange', handler);
 
-  // Return cleanup function
-  return () => {
-    window.removeEventListener('hashchange', handler);
-  };
-});
+    // Return cleanup function
+    return () => {
+      window.removeEventListener('hashchange', handler);
+    };
+  });
+}

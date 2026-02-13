@@ -5,7 +5,7 @@
    * Manages WebSocket connection and dispatches events to stores.
    */
 
-  import { getCurrentRoute, routerState } from './router.svelte';
+  import { getCurrentRoute, initRouter, routerState } from './router.svelte';
   import { createWsConnection } from './api/websocket';
   import { handleWsEvent as handleGraphWsEvent } from './stores/graph.svelte';
   import { handleWsEvent as handleAgentsWsEvent } from './stores/agents.svelte';
@@ -20,6 +20,9 @@
   import SessionHistory from './views/SessionHistory.svelte';
   import GraphSearch from './views/GraphSearch.svelte';
   import Placeholder from './views/Placeholder.svelte';
+
+  // Initialize hash-based router (must run in component context)
+  initRouter();
 
   let wsConnection: ReturnType<typeof createWsConnection> | null = null;
 

@@ -22,6 +22,14 @@ release-ui: web-build
 web-build:
     cd web && bun run build
 
+# Run daemon and web dev server together
+dev:
+    #!/usr/bin/env bash
+    trap 'kill 0' EXIT
+    cargo run -- daemon start &
+    cd web && bun run dev &
+    wait
+
 # Run the web UI dev server
 web-dev:
     cd web && bun run dev
