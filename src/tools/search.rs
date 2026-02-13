@@ -259,7 +259,7 @@ mod tests {
         // Create a text file
         std::fs::write(project_root.join("text.txt"), "hello world").unwrap();
         // Create a binary file (random bytes)
-        std::fs::write(project_root.join("binary.bin"), &[0xFF, 0xFE, 0xFD]).unwrap();
+        std::fs::write(project_root.join("binary.bin"), [0xFF, 0xFE, 0xFD]).unwrap();
 
         let tool = CodeSearchTool::new(project_root);
         let params = json!({
