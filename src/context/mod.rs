@@ -9,6 +9,19 @@ use std::path::PathBuf;
 
 pub use agents_md::resolve_agents_md;
 
+/// Token budget for context assembly
+#[derive(Clone, Debug)]
+pub struct ContextBudget {
+    /// Total token budget for the system prompt (default: 4000)
+    pub max_tokens: usize,
+}
+
+impl Default for ContextBudget {
+    fn default() -> Self {
+        Self { max_tokens: 4000 }
+    }
+}
+
 /// Builds a compact structured system prompt from an AgentContext
 pub struct ContextBuilder;
 
@@ -107,6 +120,155 @@ impl ContextBuilder {
         prompt.push_str("## Rules\n");
         prompt.push_str(&ctx.profile.system_prompt);
         prompt.push('\n');
+
+        prompt
+    }
+
+    /// Build a system prompt with token budget awareness
+    ///
+    /// Prioritizes required sections (Role, Task, Dependencies, Previous Attempt, Rules) and trims optional sections
+    /// (Session Continuity, Active Decisions, Observations, Project Conventions) when over budget.
+    pub fn build_system_prompt_with_budget(ctx: &AgentContext, budget: &ContextBudget) -> String {
+        // Token estimate: ~1 token per 4 characters
+        let estimate_tokens = |text: &str| text.len() / 4;
+
+        // Build required sections first (these are never trimmed)
+        let mut required = String::new();
+
+        // Role section
+        required.push_str("## Role\n");
+        required.push_str(&ctx.profile.role);
+        required.push('\n');
+        required.push('\n');
+
+        // Task section - show work package tasks
+        if !ctx.work_package_tasks.is_empty() {
+            required.push_str("## Task\n");
+            for task in &ctx.work_package_tasks {
+                required.push_str(&format!(
+                    "[TASK] {} | {} | priority={}\n",
+                    task.id,
+                    task.title,
+                    task.priority
+                        .map(|p| p.to_string())
+                        .unwrap_or_else(|| "medium".to_string())
+                ));
+
+                // Add acceptance criteria if present in metadata
+                if let Some(criteria) = task.metadata.get("acceptance_criteria") {
+                    required.push_str(&format!("[CRITERIA] {}\n", criteria));
+                }
+            }
+            required.push('\n');
+        }
+
+        // Dependency status section (required - agents need to know dependency status)
+        if !ctx.dependency_statuses.is_empty() {
+            for (id, title, is_done) in &ctx.dependency_statuses {
+                if *is_done {
+                    required.push_str(&format!("[DEP:DONE] {} → {} (completed)\n", id, title));
+                } else {
+                    required.push_str(&format!("[DEP:PENDING] {} → {} (pending)\n", id, title));
+                }
+            }
+        }
+
+        // Previous attempt section (required - agents retrying need this context)
+        if let Some(prev) = &ctx.previous_attempt {
+            required.push_str("\n## Previous Attempt\n");
+            required.push_str(&format!("[PREV_ATTEMPT] {}\n\n", prev));
+        }
+
+        // Rules from the profile (required - critical for agent behavior)
+        required.push_str("## Rules\n");
+        required.push_str(&ctx.profile.system_prompt);
+        required.push('\n');
+
+        let required_tokens = estimate_tokens(&required);
+
+        // If required sections already exceed budget, just return them
+        if required_tokens >= budget.max_tokens {
+            return required;
+        }
+
+        // Budget remaining for optional sections
+        let mut remaining_budget = budget.max_tokens - required_tokens;
+        let mut prompt = required;
+
+        // Build optional sections in priority order
+        // Priority 1 (highest): Session Continuity
+        let mut session_section = String::new();
+        if let Some(handoff) = &ctx.handoff_notes {
+            session_section.push_str("## Session Continuity\n");
+            session_section.push_str(&format!("[HANDOFF] {}\n", handoff));
+            session_section.push('\n');
+        }
+
+        // Priority 2: Active Decisions
+        let mut decisions_section = String::new();
+        if !ctx.relevant_decisions.is_empty() {
+            decisions_section.push_str("## Active Decisions\n");
+            for decision in &ctx.relevant_decisions {
+                decisions_section.push_str(&format!(
+                    "[DECISION] {} | {} | status={}\n",
+                    decision.id, decision.title, decision.status
+                ));
+
+                // Add chosen option if present
+                if let Some(chosen) = decision.metadata.get("chosen_option") {
+                    decisions_section.push_str(&format!("  chosen: {}\n", chosen));
+                }
+            }
+            decisions_section.push('\n');
+        }
+
+        // Priority 3: Relevant Observations
+        let mut observations_section = String::new();
+        if !ctx.work_package_tasks.is_empty() {
+            observations_section.push_str("## Relevant Observations (use query_nodes(id) for full detail)\n");
+            for task in &ctx.work_package_tasks {
+                observations_section.push_str(&format!("- {}: {}\n", task.id, task.description));
+            }
+            observations_section.push('\n');
+        }
+
+        // Priority 4 (lowest): Project Conventions
+        let mut conventions_section = String::new();
+        if !ctx.agents_md_summaries.is_empty() {
+            conventions_section.push_str("## Project Conventions (use read_agents_md(path) for full text)\n");
+            for (path, heading_summary) in &ctx.agents_md_summaries {
+                conventions_section.push_str(&format!("- {}: {}\n", path, heading_summary));
+            }
+            conventions_section.push('\n');
+        }
+
+        // Add sections in priority order if they fit
+        // Priority 1: Session Continuity
+        let session_tokens = estimate_tokens(&session_section);
+        if session_tokens > 0 && session_tokens <= remaining_budget {
+            prompt.push_str(&session_section);
+            remaining_budget -= session_tokens;
+        }
+
+        // Priority 2: Active Decisions
+        let decisions_tokens = estimate_tokens(&decisions_section);
+        if decisions_tokens > 0 && decisions_tokens <= remaining_budget {
+            prompt.push_str(&decisions_section);
+            remaining_budget -= decisions_tokens;
+        }
+
+        // Priority 3: Relevant Observations
+        let observations_tokens = estimate_tokens(&observations_section);
+        if observations_tokens > 0 && observations_tokens <= remaining_budget {
+            prompt.push_str(&observations_section);
+            remaining_budget -= observations_tokens;
+        }
+
+        // Priority 4: Project Conventions
+        let conventions_tokens = estimate_tokens(&conventions_section);
+        if conventions_tokens > 0 && conventions_tokens <= remaining_budget {
+            prompt.push_str(&conventions_section);
+        }
 
         prompt
     }
@@ -981,5 +1143,379 @@ mod tests {
             !prompt.contains("## Previous Attempt"),
             "Should NOT contain Previous Attempt section when previous_attempt is None"
         );
+    }
+
+    #[test]
+    fn test_v2_phase5_ac4_1_budget_aware_trimming() {
+        // v2-phase5.AC4.1: With a very small budget, only required sections appear; optional sections are trimmed
+        use crate::agent::profile::AgentProfile;
+        use crate::graph::store::GraphStore;
+        use crate::graph::{GraphNode, NodeType};
+        use crate::security::SecurityScope;
+        use anyhow::Result;
+        use async_trait::async_trait;
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        struct TestGraphStore;
+
+        #[async_trait]
+        impl GraphStore for TestGraphStore {
+            async fn create_node(&self, _node: &GraphNode) -> Result<()> {
+                Ok(())
+            }
+            async fn update_node(
+                &self,
+                _id: &str,
+                _status: Option<crate::graph::NodeStatus>,
+                _title: Option<&str>,
+                _description: Option<&str>,
+                _blocked_reason: Option<&str>,
+                _metadata: Option<&HashMap<String, String>>,
+            ) -> Result<()> {
+                Ok(())
+            }
+            async fn get_node(&self, _id: &str) -> Result<Option<GraphNode>> {
+                Ok(None)
+            }
+            async fn query_nodes(
+                &self,
+                _query: &crate::graph::store::NodeQuery,
+            ) -> Result<Vec<GraphNode>> {
+                Ok(vec![])
+            }
+            async fn claim_task(&self, _node_id: &str, _agent_id: &str) -> Result<bool> {
+                Ok(false)
+            }
+            async fn get_ready_tasks(&self, _goal_id: &str) -> Result<Vec<GraphNode>> {
+                Ok(vec![])
+            }
+            async fn get_next_task(&self, _goal_id: &str) -> Result<Option<GraphNode>> {
+                Ok(None)
+            }
+            async fn add_edge(&self, _edge: &crate::graph::GraphEdge) -> Result<()> {
+                Ok(())
+            }
+            async fn remove_edge(&self, _edge_id: &str) -> Result<()> {
+                Ok(())
+            }
+            async fn get_edges(
+                &self,
+                _node_id: &str,
+                _direction: crate::graph::store::EdgeDirection,
+            ) -> Result<Vec<(crate::graph::GraphEdge, GraphNode)>> {
+                Ok(vec![])
+            }
+            async fn get_children(
+                &self,
+                _node_id: &str,
+            ) -> Result<Vec<(GraphNode, crate::graph::EdgeType)>> {
+                Ok(vec![])
+            }
+            async fn get_subtree(&self, _node_id: &str) -> Result<Vec<GraphNode>> {
+                Ok(vec![])
+            }
+            async fn get_active_decisions(&self, _project_id: &str) -> Result<Vec<GraphNode>> {
+                Ok(vec![])
+            }
+            async fn get_full_graph(
+                &self,
+                _goal_id: &str,
+            ) -> Result<crate::graph::store::WorkGraph> {
+                Ok(crate::graph::store::WorkGraph {
+                    nodes: vec![],
+                    edges: vec![],
+                })
+            }
+            async fn search_nodes(
+                &self,
+                _query: &str,
+                _project_id: Option<&str>,
+                _node_type: Option<NodeType>,
+                _limit: usize,
+            ) -> Result<Vec<GraphNode>> {
+                Ok(vec![])
+            }
+            async fn next_child_seq(&self, _parent_id: &str) -> Result<u32> {
+                Ok(1)
+            }
+            async fn import_nodes_and_edges(
+                &self,
+                _nodes: Vec<GraphNode>,
+                _edges: Vec<crate::graph::GraphEdge>,
+            ) -> Result<()> {
+                Ok(())
+            }
+        }
+
+        let profile = AgentProfile {
+            name: "test".to_string(),
+            extends: None,
+            role: "You are a helpful code assistant".to_string(),
+            system_prompt: "Follow these rules carefully".to_string(),
+            allowed_tools: vec![],
+            security: SecurityScope::default(),
+            llm: Default::default(),
+            turn_limit: None,
+            token_budget: None,
+        };
+
+        // Create tasks with long descriptions to trigger trimming
+        let work_package_tasks = vec![GraphNode {
+            id: "task-1".to_string(),
+            project_id: "proj-1".to_string(),
+            node_type: NodeType::Task,
+            title: "Implement feature".to_string(),
+            description: "This is a very long description that should be trimmed when budget is tight. It contains multiple sentences and spans several lines of text to ensure we have enough content to test budget trimming behavior.".to_string(),
+            status: crate::graph::NodeStatus::Ready,
+            priority: Some(crate::graph::Priority::High),
+            assigned_to: None,
+            created_by: None,
+            labels: vec![],
+            created_at: chrono::Utc::now(),
+            started_at: None,
+            completed_at: None,
+            blocked_reason: None,
+            metadata: HashMap::new(),
+        }];
+
+        // Create decisions
+        let relevant_decisions = vec![GraphNode {
+            id: "decision-1".to_string(),
+            project_id: "proj-1".to_string(),
+            node_type: NodeType::Decision,
+            title: "Architecture decision".to_string(),
+            description: "Choose the right architecture for the system by considering scalability, maintainability, and performance requirements.".to_string(),
+            status: crate::graph::NodeStatus::Decided,
+            priority: None,
+            assigned_to: None,
+            created_by: None,
+            labels: vec![],
+            created_at: chrono::Utc::now(),
+            started_at: None,
+            completed_at: None,
+            blocked_reason: None,
+            metadata: {
+                let mut m = HashMap::new();
+                m.insert("chosen_option".to_string(), "Option B".to_string());
+                m
+            },
+        }];
+
+        let ctx = AgentContext {
+            work_package_tasks,
+            relevant_decisions,
+            handoff_notes: Some("Previous session notes that are quite detailed and span multiple concepts".to_string()),
+            agents_md_summaries: vec![(
+                "src/AGENTS.md".to_string(),
+                "Code standards and conventions for the project".to_string(),
+            )],
+            profile,
+            project_path: PathBuf::from("/test/project"),
+            graph_store: Arc::new(TestGraphStore),
+            previous_attempt: None,
+            dependency_statuses: vec![],
+        };
+
+        // Test with very small budget (100 tokens - forces trimming of optional sections)
+        let small_budget = ContextBudget {
+            max_tokens: 100,
+        };
+
+        let prompt = ContextBuilder::build_system_prompt_with_budget(&ctx, &small_budget);
+
+        // Required sections should always be present
+        assert!(prompt.contains("## Role"), "Should contain Role section (required)");
+        assert!(
+            prompt.contains("## Task"),
+            "Should contain Task section (required)"
+        );
+        assert!(prompt.contains("## Rules"), "Should contain Rules section (required)");
+
+        // With tiny budget, optional sections should be trimmed
+        // Project Conventions is lowest priority and should be trimmed
+        assert!(
+            !prompt.contains("## Project Conventions"),
+            "Should trim Project Conventions (lowest priority) with very small budget"
+        );
+    }
+
+    #[test]
+    fn test_v2_phase5_ac4_2_required_sections_never_trimmed() {
+        // v2-phase5.AC4.2: Required sections (Role, Task, Rules) are never trimmed regardless of budget
+        use crate::agent::profile::AgentProfile;
+        use crate::graph::store::GraphStore;
+        use crate::graph::{GraphNode, NodeType};
+        use crate::security::SecurityScope;
+        use anyhow::Result;
+        use async_trait::async_trait;
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        struct TestGraphStore;
+
+        #[async_trait]
+        impl GraphStore for TestGraphStore {
+            async fn create_node(&self, _node: &GraphNode) -> Result<()> {
+                Ok(())
+            }
+            async fn update_node(
+                &self,
+                _id: &str,
+                _status: Option<crate::graph::NodeStatus>,
+                _title: Option<&str>,
+                _description: Option<&str>,
+                _blocked_reason: Option<&str>,
+                _metadata: Option<&HashMap<String, String>>,
+            ) -> Result<()> {
+                Ok(())
+            }
+            async fn get_node(&self, _id: &str) -> Result<Option<GraphNode>> {
+                Ok(None)
+            }
+            async fn query_nodes(
+                &self,
+                _query: &crate::graph::store::NodeQuery,
+            ) -> Result<Vec<GraphNode>> {
+                Ok(vec![])
+            }
+            async fn claim_task(&self, _node_id: &str, _agent_id: &str) -> Result<bool> {
+                Ok(false)
+            }
+            async fn get_ready_tasks(&self, _goal_id: &str) -> Result<Vec<GraphNode>> {
+                Ok(vec![])
+            }
+            async fn get_next_task(&self, _goal_id: &str) -> Result<Option<GraphNode>> {
+                Ok(None)
+            }
+            async fn add_edge(&self, _edge: &crate::graph::GraphEdge) -> Result<()> {
+                Ok(())
+            }
+            async fn remove_edge(&self, _edge_id: &str) -> Result<()> {
+                Ok(())
+            }
+            async fn get_edges(
+                &self,
+                _node_id: &str,
+                _direction: crate::graph::store::EdgeDirection,
+            ) -> Result<Vec<(crate::graph::GraphEdge, GraphNode)>> {
+                Ok(vec![])
+            }
+            async fn get_children(
+                &self,
+                _node_id: &str,
+            ) -> Result<Vec<(GraphNode, crate::graph::EdgeType)>> {
+                Ok(vec![])
+            }
+            async fn get_subtree(&self, _node_id: &str) -> Result<Vec<GraphNode>> {
+                Ok(vec![])
+            }
+            async fn get_active_decisions(&self, _project_id: &str) -> Result<Vec<GraphNode>> {
+                Ok(vec![])
+            }
+            async fn get_full_graph(
+                &self,
+                _goal_id: &str,
+            ) -> Result<crate::graph::store::WorkGraph> {
+                Ok(crate::graph::store::WorkGraph {
+                    nodes: vec![],
+                    edges: vec![],
+                })
+            }
+            async fn search_nodes(
+                &self,
+                _query: &str,
+                _project_id: Option<&str>,
+                _node_type: Option<NodeType>,
+                _limit: usize,
+            ) -> Result<Vec<GraphNode>> {
+                Ok(vec![])
+            }
+            async fn next_child_seq(&self, _parent_id: &str) -> Result<u32> {
+                Ok(1)
+            }
+            async fn import_nodes_and_edges(
+                &self,
+                _nodes: Vec<GraphNode>,
+                _edges: Vec<crate::graph::GraphEdge>,
+            ) -> Result<()> {
+                Ok(())
+            }
+        }
+
+        let profile = AgentProfile {
+            name: "test".to_string(),
+            extends: None,
+            role: "You are a helpful code assistant".to_string(),
+            system_prompt: "Follow these rules carefully".to_string(),
+            allowed_tools: vec![],
+            security: SecurityScope::default(),
+            llm: Default::default(),
+            turn_limit: None,
+            token_budget: None,
+        };
+
+        let work_package_tasks = vec![GraphNode {
+            id: "task-1".to_string(),
+            project_id: "proj-1".to_string(),
+            node_type: NodeType::Task,
+            title: "Implement feature".to_string(),
+            description: "A detailed implementation task".to_string(),
+            status: crate::graph::NodeStatus::Ready,
+            priority: Some(crate::graph::Priority::High),
+            assigned_to: None,
+            created_by: None,
+            labels: vec![],
+            created_at: chrono::Utc::now(),
+            started_at: None,
+            completed_at: None,
+            blocked_reason: None,
+            metadata: HashMap::new(),
+        }];
+
+        let ctx = AgentContext {
+            work_package_tasks,
+            relevant_decisions: vec![],
+            handoff_notes: None,
+            agents_md_summaries: vec![],
+            profile,
+            project_path: PathBuf::from("/test/project"),
+            graph_store: Arc::new(TestGraphStore),
+            previous_attempt: None,
+            dependency_statuses: vec![],
+        };
+
+        // Test with extremely small budget (10 tokens - smaller than required sections)
+        let tiny_budget = ContextBudget {
+            max_tokens: 10,
+        };
+
+        let prompt = ContextBuilder::build_system_prompt_with_budget(&ctx, &tiny_budget);
+
+        // Required sections must always be present, even with a tiny budget
+        assert!(
+            prompt.contains("## Role"),
+            "Should contain Role section even with tiny budget (required)"
+        );
+        assert!(
+            prompt.contains("## Task"),
+            "Should contain Task section even with tiny budget (required)"
+        );
+        assert!(
+            prompt.contains("## Rules"),
+            "Should contain Rules section even with tiny budget (required)"
+        );
+    }
+
+    #[test]
+    fn test_context_budget_default() {
+        let budget = ContextBudget::default();
+        assert_eq!(budget.max_tokens, 4000, "Default budget should be 4000 tokens");
+    }
+
+    #[test]
+    fn test_context_budget_custom() {
+        let budget = ContextBudget { max_tokens: 2000 };
+        assert_eq!(budget.max_tokens, 2000);
     }
 }
