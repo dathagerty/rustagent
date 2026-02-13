@@ -92,11 +92,10 @@ impl Tool for CodeSearchTool {
 
         // Walk directory tree
         for entry in WalkDir::new(&search_root).into_iter().filter_entry(|e| {
-            // Skip hidden directories
-            let file_name = e.file_name().to_string_lossy();
-            if e.file_type().is_dir() && file_name.starts_with('.') {
-                let name_str = file_name.as_ref();
-                !skip_dirs.contains(&name_str)
+            // Skip directories in skip_dirs list
+            if e.file_type().is_dir() {
+                let file_name = e.file_name().to_string_lossy();
+                !skip_dirs.contains(&file_name.as_ref())
             } else {
                 true
             }
@@ -269,7 +268,7 @@ mod tests {
 
         // Should not fail, just skip the binary
         let result = tool.execute(params).await.unwrap();
-        assert!(result.contains("text.txt") || result.contains("No matches found"));
+        assert!(result.contains("text.txt"));
     }
 
     #[tokio::test]
@@ -311,5 +310,41 @@ mod tests {
 
         let result = tool.execute(params).await.unwrap();
         assert_eq!(result, "No matches found");
+    }
+
+    #[tokio::test]
+    async fn code_search_skips_node_modules_and_target() {
+        let temp_dir = TempDir::new().unwrap();
+        let project_root = temp_dir.path().to_path_buf();
+
+        // Create files in regular directory
+        std::fs::write(project_root.join("main.rs"), "fn main() {}").unwrap();
+
+        // Create files in node_modules (should be skipped)
+        std::fs::create_dir_all(project_root.join("node_modules")).unwrap();
+        std::fs::write(
+            project_root.join("node_modules/package.txt"),
+            "fn should_skip",
+        )
+        .unwrap();
+
+        // Create files in target (should be skipped)
+        std::fs::create_dir_all(project_root.join("target")).unwrap();
+        std::fs::write(
+            project_root.join("target/artifact.rs"),
+            "fn should_skip",
+        )
+        .unwrap();
+
+        let tool = CodeSearchTool::new(project_root);
+        let params = json!({
+            "pattern": "fn"
+        });
+
+        let result = tool.execute(params).await.unwrap();
+        // Should find main.rs but NOT files in node_modules or target
+        assert!(result.contains("main.rs"));
+        assert!(!result.contains("node_modules"));
+        assert!(!result.contains("target"));
     }
 }

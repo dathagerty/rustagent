@@ -1141,31 +1141,31 @@ impl Orchestrator {
 
         for task in &blocked_tasks {
             // Look up blocker task ID from metadata (set during cascade)
-            if let Some(blocker_id) = task.metadata.get("blocker_task_id") {
-                if let Some(blocker) = self.graph_store.get_node(blocker_id).await? {
-                    // If the blocker has been retried and is now completed, unblock
-                    if blocker.status == NodeStatus::Completed {
-                        // Remove blocker_task_id from metadata when unblocking
-                        let mut metadata = task.metadata.clone();
-                        metadata.remove("blocker_task_id");
+            if let Some(blocker_id) = task.metadata.get("blocker_task_id")
+                && let Some(blocker) = self.graph_store.get_node(blocker_id).await?
+            {
+                // If the blocker has been retried and is now completed, unblock
+                if blocker.status == NodeStatus::Completed {
+                    // Remove blocker_task_id from metadata when unblocking
+                    let mut metadata = task.metadata.clone();
+                    metadata.remove("blocker_task_id");
 
-                        self.graph_store
-                            .update_node(
-                                &task.id,
-                                Some(NodeStatus::Ready),
-                                None,            // title unchanged
-                                None,            // description unchanged
-                                Some(""),        // clear blocked_reason by setting to empty string
-                                Some(&metadata), // metadata with blocker_task_id removed
-                            )
-                            .await?;
+                    self.graph_store
+                        .update_node(
+                            &task.id,
+                            Some(NodeStatus::Ready),
+                            None,            // title unchanged
+                            None,            // description unchanged
+                            Some(""),        // clear blocked_reason by setting to empty string
+                            Some(&metadata), // metadata with blocker_task_id removed
+                        )
+                        .await?;
 
-                        tracing::info!(
-                            task = %task.id,
-                            blocker = %blocker_id,
-                            "Task unblocked: dependency resolved"
-                        );
-                    }
+                    tracing::info!(
+                        task = %task.id,
+                        blocker = %blocker_id,
+                        "Task unblocked: dependency resolved"
+                    );
                 }
             }
         }
