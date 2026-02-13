@@ -630,3 +630,138 @@ async fn test_run_delegates_to_run_with_shutdown() {
     let next_state = orchestrator.handle_scheduling().await.unwrap();
     assert_eq!(next_state, OrchestratorState::Completing);
 }
+
+// ===== Phase 5 Error Recovery & Task Reassignment Tests =====
+
+/// Integration test: Full retry-cascade-unblock lifecycle
+/// Verifies v2-phase5.AC11.1, v2-phase5.AC12.1, v2-phase5.AC13.1
+#[tokio::test]
+async fn test_retry_cascade_unblock_lifecycle() {
+    let (_, graph_store) = common::setup_test_env().await.unwrap();
+    let graph_store: Arc<dyn rustagent::graph::store::GraphStore> = Arc::new(graph_store);
+    let mock_client = Arc::new(MockLlmClient::new());
+
+    let config = OrchestratorConfig {
+        max_retries_per_task: 2,
+        ..Default::default()
+    };
+    let mut orchestrator = create_test_orchestrator(config, graph_store.clone(), mock_client);
+    orchestrator.set_goal_id(Some("ra-p5-test".to_string()));
+
+    // Create goal node
+    let goal_node = common::create_test_goal("ra-p5-test", "proj-1", "Phase 5 test goal");
+    graph_store.create_node(&goal_node).await.unwrap();
+
+    // Create task A (Ready status)
+    let task_a = common::create_test_task("ra-p5-test.1", "proj-1", "Task A", rustagent::graph::NodeStatus::Ready);
+    graph_store.create_node(&task_a).await.unwrap();
+
+    // Create task B that DependsOn A (Ready status)
+    let task_b = common::create_test_task("ra-p5-test.2", "proj-1", "Task B", rustagent::graph::NodeStatus::Ready);
+    graph_store.create_node(&task_b).await.unwrap();
+
+    // Create DependsOn edge: B depends on A
+    let depends_edge = rustagent::graph::GraphEdge {
+        id: "e-depends1".to_string(),
+        edge_type: rustagent::graph::EdgeType::DependsOn,
+        from_node: "ra-p5-test.2".to_string(), // B
+        to_node: "ra-p5-test.1".to_string(),    // A
+        label: None,
+        created_at: chrono::Utc::now(),
+    };
+    graph_store.add_edge(&depends_edge).await.unwrap();
+
+    // Create Contains edges to goal
+    graph_store.add_edge(&rustagent::graph::GraphEdge {
+        id: "e-contains1".to_string(),
+        edge_type: rustagent::graph::EdgeType::Contains,
+        from_node: "ra-p5-test".to_string(),
+        to_node: "ra-p5-test.1".to_string(),
+        label: None,
+        created_at: chrono::Utc::now(),
+    }).await.unwrap();
+
+    graph_store.add_edge(&rustagent::graph::GraphEdge {
+        id: "e-contains2".to_string(),
+        edge_type: rustagent::graph::EdgeType::Contains,
+        from_node: "ra-p5-test".to_string(),
+        to_node: "ra-p5-test.2".to_string(),
+        label: None,
+        created_at: chrono::Utc::now(),
+    }).await.unwrap();
+
+    // === Step 1: Simulate Task A failing (first attempt) ===
+    let error_msg_1 = "First failure: database connection timeout";
+    orchestrator.handle_task_retry_or_fail("ra-p5-test.1", error_msg_1).await.unwrap();
+
+    // Verify Task A is retried (Ready state) with previous_attempt in metadata
+    let task_a_after_retry1 = graph_store.get_node("ra-p5-test.1").await.unwrap().unwrap();
+    assert_eq!(task_a_after_retry1.status, rustagent::graph::NodeStatus::Ready);
+    assert_eq!(
+        task_a_after_retry1.metadata.get("previous_attempt"),
+        Some(&error_msg_1.to_string())
+    );
+    assert_eq!(
+        task_a_after_retry1.metadata.get("retry_count"),
+        Some(&"1".to_string())
+    );
+
+    // Verify Task B is still Ready (not blocked yet since A is being retried)
+    let task_b_check1 = graph_store.get_node("ra-p5-test.2").await.unwrap().unwrap();
+    assert_eq!(task_b_check1.status, rustagent::graph::NodeStatus::Ready);
+
+    // === Step 2: Simulate Task A failing again (second attempt, exceeding max_retries) ===
+    let error_msg_2 = "Second failure: network unreachable";
+    orchestrator.handle_task_retry_or_fail("ra-p5-test.1", error_msg_2).await.unwrap();
+
+    // Verify Task A is now Failed (retries exhausted)
+    let task_a_after_fail = graph_store.get_node("ra-p5-test.1").await.unwrap().unwrap();
+    assert_eq!(task_a_after_fail.status, rustagent::graph::NodeStatus::Failed);
+    assert_eq!(task_a_after_fail.blocked_reason, Some(error_msg_2.to_string()));
+
+    // Verify an Observation node was created for the failure
+    let obs_nodes = graph_store.query_nodes(&rustagent::graph::store::NodeQuery {
+        node_type: Some(rustagent::graph::NodeType::Observation),
+        status: None,
+        project_id: None,
+        parent_id: None,
+        query: None,
+    }).await.unwrap();
+    assert!(!obs_nodes.is_empty(), "Expected an Observation node for task failure");
+
+    // Verify Task B is now Blocked (cascade occurred)
+    let task_b_after_cascade = graph_store.get_node("ra-p5-test.2").await.unwrap().unwrap();
+    assert_eq!(task_b_after_cascade.status, rustagent::graph::NodeStatus::Blocked);
+    assert!(
+        task_b_after_cascade.blocked_reason.as_ref().map(|r| r.contains("ra-p5-test.1")).unwrap_or(false),
+        "Task B should be blocked by A: {:?}",
+        task_b_after_cascade.blocked_reason
+    );
+    assert_eq!(
+        task_b_after_cascade.metadata.get("blocker_task_id"),
+        Some(&"ra-p5-test.1".to_string())
+    );
+
+    // === Step 3: Manually complete Task A (simulate external fix) ===
+    graph_store.update_node(
+        "ra-p5-test.1",
+        Some(rustagent::graph::NodeStatus::Completed),
+        None,
+        None,
+        None,
+        None,
+    ).await.unwrap();
+
+    // Verify Task A is Completed
+    let task_a_completed = graph_store.get_node("ra-p5-test.1").await.unwrap().unwrap();
+    assert_eq!(task_a_completed.status, rustagent::graph::NodeStatus::Completed);
+
+    // === Step 4: Call handle_scheduling which triggers try_unblock_tasks ===
+    orchestrator.handle_scheduling().await.unwrap();
+
+    // Verify Task B is now Ready (unblocked)
+    let task_b_unblocked = graph_store.get_node("ra-p5-test.2").await.unwrap().unwrap();
+    assert_eq!(task_b_unblocked.status, rustagent::graph::NodeStatus::Ready);
+    assert!(task_b_unblocked.blocked_reason.is_none(), "Blocked reason should be cleared");
+    assert!(!task_b_unblocked.metadata.contains_key("blocker_task_id"), "blocker_task_id should be removed");
+}

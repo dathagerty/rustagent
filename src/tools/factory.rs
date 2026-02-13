@@ -11,8 +11,10 @@ use crate::tools::graph_tools::{
     AddEdgeTool, ChooseOptionTool, ClaimTaskTool, CreateNodeTool, LogDecisionTool, QueryNodesTool,
     RecordObservationTool, RecordOutcomeTool, RevisitTool, SearchNodesTool, UpdateNodeTool,
 };
+use crate::tools::search::CodeSearchTool;
 use crate::tools::shell::RunCommandTool;
 use crate::tools::signal::SignalTool;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 pub fn create_default_registry(
@@ -52,6 +54,7 @@ pub fn create_v2_registry(
     graph_store: Arc<dyn GraphStore>,
     message_bus: Option<Arc<dyn MessageBus>>,
     agent_id: Option<AgentId>,
+    project_root: PathBuf,
 ) -> ToolRegistry {
     let registry = create_default_registry(validator, permission_handler);
 
@@ -70,6 +73,9 @@ pub fn create_v2_registry(
 
     // Register context tools
     registry.register(Arc::new(ReadAgentsMdTool::new()));
+
+    // Register search tools
+    registry.register(Arc::new(CodeSearchTool::new(project_root)));
 
     // Register agent tools (only in multi-agent mode)
     if let (Some(bus), Some(id)) = (message_bus, agent_id) {

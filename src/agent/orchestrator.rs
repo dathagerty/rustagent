@@ -825,6 +825,7 @@ impl Orchestrator {
             self.graph_store.clone(),
             Some(self.message_bus.clone()),
             Some(worker_id.clone()),
+            self.project_path.clone(),
         );
 
         // Create AgentRuntime

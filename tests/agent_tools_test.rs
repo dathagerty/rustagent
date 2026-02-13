@@ -448,12 +448,15 @@ async fn test_registry_includes_agent_tools_in_multi_agent_mode() {
     let validator = Arc::new(SecurityValidator::new(security_config).unwrap());
     let permission_handler = Arc::new(AutoApproveHandler);
 
+    let project_root = std::path::PathBuf::from("/tmp");
+
     let registry = create_v2_registry(
         validator,
         permission_handler,
         graph_store,
         Some(message_bus),
         Some("worker-1".to_string()),
+        project_root,
     );
 
     let tools = registry.list();
@@ -483,7 +486,9 @@ async fn test_registry_excludes_agent_tools_in_single_agent_mode() {
     let validator = Arc::new(SecurityValidator::new(security_config).unwrap());
     let permission_handler = Arc::new(AutoApproveHandler);
 
-    let registry = create_v2_registry(validator, permission_handler, graph_store, None, None);
+    let project_root = std::path::PathBuf::from("/tmp");
+
+    let registry = create_v2_registry(validator, permission_handler, graph_store, None, None, project_root);
 
     let tools = registry.list();
     assert!(!tools.contains(&"spawn_sub_agent".to_string()));

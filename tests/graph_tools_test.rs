@@ -662,10 +662,12 @@ fn test_v2_registry_includes_all_tools() {
         Arc::new(SecurityValidator::new(security_config).expect("Failed to create validator"));
     let permission_handler = Arc::new(AutoApproveHandler);
 
-    // Create the v2 registry
-    let registry = create_v2_registry(validator, permission_handler, graph_store, None, None);
+    let project_root = std::path::PathBuf::from("/tmp");
 
-    // Expected tool names: graph tools + legacy tools + context tools
+    // Create the v2 registry
+    let registry = create_v2_registry(validator, permission_handler, graph_store, None, None, project_root);
+
+    // Expected tool names: graph tools + legacy tools + context tools + search tools
     let expected_tools = vec![
         // Graph tools
         "create_node",
@@ -687,6 +689,8 @@ fn test_v2_registry_includes_all_tools() {
         "signal_completion",
         // Context tools
         "read_agents_md",
+        // Search tools
+        "code_search",
     ];
 
     // Get all registered tool names
