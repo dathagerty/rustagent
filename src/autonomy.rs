@@ -1,17 +1,12 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AutonomyLevel {
     Full,
+    #[default]
     Supervised,
     Gated,
-}
-
-impl Default for AutonomyLevel {
-    fn default() -> Self {
-        Self::Supervised
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -378,9 +373,12 @@ mod tests {
         ];
 
         for gate in gates {
-            let result =
-                checker.check_gate(gate, "ra-1234", "Test context", "Test action");
-            assert!(result.is_some(), "Gate {:?} should be active in Gated mode", gate);
+            let result = checker.check_gate(gate, "ra-1234", "Test context", "Test action");
+            assert!(
+                result.is_some(),
+                "Gate {:?} should be active in Gated mode",
+                gate
+            );
             assert_eq!(result.unwrap().gate, gate);
         }
     }
@@ -390,21 +388,11 @@ mod tests {
         let checker = GateChecker::new(AutonomyLevel::Supervised);
 
         let req1 = checker
-            .check_gate(
-                ApprovalGate::PlanReview,
-                "ra-1234",
-                "Test 1",
-                "Action 1",
-            )
+            .check_gate(ApprovalGate::PlanReview, "ra-1234", "Test 1", "Action 1")
             .unwrap();
 
         let req2 = checker
-            .check_gate(
-                ApprovalGate::PlanReview,
-                "ra-5678",
-                "Test 2",
-                "Action 2",
-            )
+            .check_gate(ApprovalGate::PlanReview, "ra-5678", "Test 2", "Action 2")
             .unwrap();
 
         assert_ne!(req1.id, req2.id);
