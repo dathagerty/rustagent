@@ -82,10 +82,7 @@ impl SecurityScope {
             if let Ok(pattern) = Pattern::new(pattern_str)
                 && pattern.matches_path_with(path_ref, opts)
             {
-                return ScopeCheck::Denied(format!(
-                    "path matches denied pattern: {}",
-                    pattern_str
-                ));
+                return ScopeCheck::Denied(format!("path matches denied pattern: {}", pattern_str));
             }
         }
 
