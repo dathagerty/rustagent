@@ -1,6 +1,6 @@
 # Rustagent
 
-Last verified: 2026-02-11
+Last verified: 2026-02-13
 
 ## Project Overview
 
@@ -62,6 +62,7 @@ src/
 ├── config.rs           # Configuration loading with env var substitution
 ├── logging.rs          # File-based tracing with daily rotation
 ├── spec.rs             # V1 specification data structures
+├── autonomy.rs         # AutonomyLevel, ApprovalGate, GateChecker for human-in-the-loop control
 ├── project.rs          # Project type and ProjectStore (CRUD over SQLite)
 ├── db/                 # Database layer (SQLite + WAL mode)
 │   ├── mod.rs          # Database wrapper with async access
@@ -80,8 +81,8 @@ src/
 │   ├── builtin_profiles.rs  # 5 built-in profiles: planner, coder, reviewer, tester, researcher
 │   └── runtime.rs      # AgentRuntime: agentic loop with token budget and failure thresholds
 ├── context/            # Context building for agent prompts
-│   ├── mod.rs          # ContextBuilder + ReadAgentsMdTool
-│   └── agents_md.rs    # AGENTS.md file discovery and heading extraction
+│   ├── mod.rs          # ContextBuilder (plain + budget-aware) + ReadAgentsMdTool
+│   └── agents_md.rs    # AGENTS.md file discovery with heading + line count extraction
 ├── llm/                # LLM provider abstraction
 │   ├── mod.rs          # LlmClient trait, Message, Response (with token tracking)
 │   ├── anthropic.rs    # Anthropic (Claude) client
@@ -96,13 +97,14 @@ src/
 ├── security/
 │   ├── mod.rs          # SecurityValidator for paths/commands
 │   ├── permission.rs   # Permission handling (CLI prompts)
-│   └── scope.rs        # SecurityScope: per-agent path/command/network restrictions
+│   └── scope.rs        # SecurityScope with check_path/check_command/check_network (glob-based)
 └── tools/
     ├── mod.rs          # Tool trait and ToolRegistry
     ├── factory.rs      # create_default_registry + create_v2_registry
     ├── graph_tools.rs  # 11 graph tools for agents (create, update, query, claim, etc.)
     ├── file.rs         # read_file, write_file, list_files
     ├── shell.rs        # run_command
+    ├── search.rs       # CodeSearchTool: regex search over project files with glob filtering
     ├── signal.rs       # signal_completion
     └── permission_check.rs  # File permission checking
 ```
