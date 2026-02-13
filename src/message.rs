@@ -120,7 +120,10 @@ impl Default for TokioMessageBus {
 impl MessageBus for TokioMessageBus {
     async fn send(&self, to: &AgentId, msg: WorkerMessage) -> Result<()> {
         let sender = {
-            let channels = self.agent_channels.lock().map_err(|e| anyhow!("lock poisoned: {}", e))?;
+            let channels = self
+                .agent_channels
+                .lock()
+                .map_err(|e| anyhow!("lock poisoned: {}", e))?;
             channels.get(to).cloned()
         };
         match sender {

@@ -1,17 +1,14 @@
 use crate::agent::AgentId;
 use crate::daemon::api::{AppState, WsEvent};
 use crate::message::{MessageBus, WorkerMessage};
-use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::State;
+use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::response::IntoResponse;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 
 /// WS /ws — WebSocket upgrade handler
-pub async fn ws_handler(
-    ws: WebSocketUpgrade,
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+pub async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse {
     ws.on_upgrade(move |socket| handle_socket(socket, state.ws_tx.subscribe()))
 }
 

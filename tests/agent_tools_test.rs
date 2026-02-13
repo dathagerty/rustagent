@@ -21,7 +21,8 @@ async fn test_spawn_sub_agent_creates_child_node() {
     let goal = common::create_test_goal("ra-test", "proj-1", "Test goal");
     graph_store.create_node(&goal).await.unwrap();
 
-    let task = common::create_test_task("ra-test.1", "proj-1", "Parent task", NodeStatus::InProgress);
+    let task =
+        common::create_test_task("ra-test.1", "proj-1", "Parent task", NodeStatus::InProgress);
     graph_store.create_node(&task).await.unwrap();
 
     let tool = SpawnSubAgentTool::new(graph_store.clone(), message_bus, "worker-1".to_string());
@@ -77,7 +78,11 @@ async fn test_spawn_sub_agent_broadcasts_message() {
     let task = common::create_test_task("ra-test.1", "proj-1", "Parent", NodeStatus::InProgress);
     graph_store.create_node(&task).await.unwrap();
 
-    let tool = SpawnSubAgentTool::new(graph_store.clone(), message_bus.clone(), "worker-1".to_string());
+    let tool = SpawnSubAgentTool::new(
+        graph_store.clone(),
+        message_bus.clone(),
+        "worker-1".to_string(),
+    );
 
     tool.execute(json!({
         "title": "Broadcast test",
@@ -312,7 +317,12 @@ async fn test_send_message_unknown_type() {
         .unwrap();
 
     let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
-    assert!(parsed["error"].as_str().unwrap().contains("unknown message_type"));
+    assert!(
+        parsed["error"]
+            .as_str()
+            .unwrap()
+            .contains("unknown message_type")
+    );
 }
 
 // ===== QueryAgentStatusTool Tests =====
@@ -327,11 +337,13 @@ async fn test_query_agent_status_with_tasks() {
     let goal = common::create_test_goal("ra-test", "proj-1", "Test goal");
     graph_store.create_node(&goal).await.unwrap();
 
-    let mut task1 = common::create_test_task("ra-test.1", "proj-1", "Task A", NodeStatus::InProgress);
+    let mut task1 =
+        common::create_test_task("ra-test.1", "proj-1", "Task A", NodeStatus::InProgress);
     task1.assigned_to = Some("worker-1".to_string());
     graph_store.create_node(&task1).await.unwrap();
 
-    let mut task2 = common::create_test_task("ra-test.2", "proj-1", "Task B", NodeStatus::Completed);
+    let mut task2 =
+        common::create_test_task("ra-test.2", "proj-1", "Task B", NodeStatus::Completed);
     task2.assigned_to = Some("worker-1".to_string());
     graph_store.create_node(&task2).await.unwrap();
 
@@ -388,7 +400,8 @@ async fn test_tool_trait_compliance() {
     let message_bus: Arc<dyn MessageBus> = Arc::new(TokioMessageBus::default());
 
     // SpawnSubAgentTool
-    let spawn_tool = SpawnSubAgentTool::new(graph_store.clone(), message_bus.clone(), "w1".to_string());
+    let spawn_tool =
+        SpawnSubAgentTool::new(graph_store.clone(), message_bus.clone(), "w1".to_string());
     assert_eq!(spawn_tool.name(), "spawn_sub_agent");
     assert!(!spawn_tool.description().is_empty());
     let params = spawn_tool.parameters();

@@ -1,8 +1,8 @@
 use super::{ApiError, AppState};
 use crate::project::Project;
+use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::Json;
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
@@ -52,9 +52,10 @@ pub async fn create_project(
 
     match state.project_store.add(&body.name, &canonical).await {
         Ok(project) => Ok((StatusCode::CREATED, Json(ProjectResponse::from(project)))),
-        Err(e) if e.to_string().contains("UNIQUE constraint") => Err(ApiError::Conflict(
-            format!("Project '{}' already exists", body.name),
-        )),
+        Err(e) if e.to_string().contains("UNIQUE constraint") => Err(ApiError::Conflict(format!(
+            "Project '{}' already exists",
+            body.name
+        ))),
         Err(e) => Err(ApiError::Internal(e.to_string())),
     }
 }

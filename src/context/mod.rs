@@ -483,6 +483,8 @@ mod tests {
             profile,
             project_path: PathBuf::from("/test/project"),
             graph_store: Arc::new(TestGraphStore),
+            previous_attempt: None,
+            dependency_statuses: vec![],
         };
 
         // Build system prompt

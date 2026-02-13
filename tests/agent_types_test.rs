@@ -81,6 +81,8 @@ fn test_agent_context_construction() {
         profile,
         project_path: PathBuf::from("/tmp"),
         graph_store: Arc::new(MockGraphStore),
+        previous_attempt: None,
+        dependency_statuses: vec![],
     };
     // If this compiles, the struct is correctly defined
 }
@@ -179,6 +181,8 @@ async fn test_mock_agent_run() {
         profile: agent.profile().clone(),
         project_path: PathBuf::from("/tmp"),
         graph_store: Arc::new(MockGraphStore),
+        previous_attempt: None,
+        dependency_statuses: vec![],
     };
 
     let result = agent.run(ctx).await;

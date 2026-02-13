@@ -139,10 +139,7 @@ mod tests {
     fn test_extract_heading_summaries_empty_sections() -> Result<()> {
         let tmpdir = TempDir::new()?;
         let agents_md_path = tmpdir.path().join("AGENTS.md");
-        fs::write(
-            &agents_md_path,
-            "# First\n\n\n# Second\nContent\n# Third\n",
-        )?;
+        fs::write(&agents_md_path, "# First\n\n\n# Second\nContent\n# Third\n")?;
 
         let summaries = extract_heading_summaries(&agents_md_path)?;
         assert_eq!(summaries.len(), 3);
@@ -158,7 +155,10 @@ mod tests {
         let project_root = tmpdir.path();
 
         // Create AGENTS.md at root
-        fs::write(project_root.join("AGENTS.md"), "# Root\nroot content\n# Guidelines")?;
+        fs::write(
+            project_root.join("AGENTS.md"),
+            "# Root\nroot content\n# Guidelines",
+        )?;
 
         // Create a file to scope
         fs::write(project_root.join("main.rs"), "fn main() {}")?;

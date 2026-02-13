@@ -6,10 +6,7 @@ fn test_daemon_config_defaults() {
     let config = DaemonConfig::default();
     assert_eq!(config.bind_address, "127.0.0.1");
     assert_eq!(config.port, 7400);
-    assert!(config
-        .pid_file
-        .to_string_lossy()
-        .contains("rustagent.pid"));
+    assert!(config.pid_file.to_string_lossy().contains("rustagent.pid"));
 }
 
 #[test]

@@ -1,5 +1,5 @@
-use rustagent::daemon::client::{detect_daemon, DaemonClient};
 use rustagent::daemon::DaemonConfig;
+use rustagent::daemon::client::{DaemonClient, detect_daemon};
 use std::path::Path;
 use tempfile::TempDir;
 
@@ -106,10 +106,12 @@ async fn test_health_with_test_server() {
 
     // GET to nonexistent API path hits the fallback handler (returns 200 with fallback JSON)
     let fallback: serde_json::Value = client.get("/api/nonexistent").await.unwrap();
-    assert!(fallback["message"]
-        .as_str()
-        .unwrap()
-        .contains("not bundled"));
+    assert!(
+        fallback["message"]
+            .as_str()
+            .unwrap()
+            .contains("not bundled")
+    );
 
     server_handle.abort();
 }

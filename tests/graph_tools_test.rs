@@ -1,12 +1,12 @@
+use rustagent::config::SecurityConfig;
 use rustagent::db::Database;
 use rustagent::graph::store::{GraphStore, SqliteGraphStore};
 use rustagent::graph::{EdgeType, NodeStatus, NodeType};
-use rustagent::tools::Tool;
-use rustagent::tools::graph_tools::*;
-use rustagent::tools::factory::create_v2_registry;
 use rustagent::security::SecurityValidator;
 use rustagent::security::permission::AutoApproveHandler;
-use rustagent::config::SecurityConfig;
+use rustagent::tools::Tool;
+use rustagent::tools::factory::create_v2_registry;
+use rustagent::tools::graph_tools::*;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -658,7 +658,8 @@ fn test_v2_registry_includes_all_tools() {
         max_file_size_mb: 100,
         allowed_paths: vec![],
     };
-    let validator = Arc::new(SecurityValidator::new(security_config).expect("Failed to create validator"));
+    let validator =
+        Arc::new(SecurityValidator::new(security_config).expect("Failed to create validator"));
     let permission_handler = Arc::new(AutoApproveHandler);
 
     // Create the v2 registry

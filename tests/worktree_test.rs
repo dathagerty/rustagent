@@ -279,8 +279,7 @@ fn test_gitignore_appends_to_existing() {
 #[tokio::test]
 async fn test_single_agent_no_worktree_branch_in_summary() {
     let (_, graph_store) = common::setup_test_env().await.unwrap();
-    let graph_store: Arc<dyn rustagent::graph::store::GraphStore> =
-        Arc::new(graph_store);
+    let graph_store: Arc<dyn rustagent::graph::store::GraphStore> = Arc::new(graph_store);
 
     use rustagent::agent::orchestrator::{Orchestrator, OrchestratorConfig};
     use rustagent::config::{SecurityConfig, ShellPolicy};

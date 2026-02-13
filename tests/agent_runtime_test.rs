@@ -30,6 +30,8 @@ fn make_test_context() -> AgentContext {
         },
         project_path: PathBuf::from("/tmp/test"),
         graph_store: Arc::new(MockGraphStore),
+        previous_attempt: None,
+        dependency_statuses: vec![],
     }
 }
 

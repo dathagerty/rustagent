@@ -1,5 +1,5 @@
-use rustagent::agent::work_package::*;
 use rustagent::agent::AgentOutcome;
+use rustagent::agent::work_package::*;
 use rustagent::graph::Priority;
 use std::path::PathBuf;
 
@@ -118,7 +118,12 @@ fn test_worker_state_variants() {
 #[tokio::test]
 async fn test_worker_handle_fields() {
     let cancel_token = tokio_util::sync::CancellationToken::new();
-    let handle = tokio::spawn(async { Ok(AgentOutcome::Completed { summary: "done".to_string(), tokens_used: 0 }) });
+    let handle = tokio::spawn(async {
+        Ok(AgentOutcome::Completed {
+            summary: "done".to_string(),
+            tokens_used: 0,
+        })
+    });
     let now = chrono::Utc::now();
 
     let wh = WorkerHandle {
@@ -224,7 +229,12 @@ fn test_work_package_id_format() {
     let id = generate_work_package_id();
     assert!(id.starts_with("wp-"), "ID should start with 'wp-': {}", id);
     let hex_part = &id[3..];
-    assert_eq!(hex_part.len(), 8, "Hex part should be 8 chars: {}", hex_part);
+    assert_eq!(
+        hex_part.len(),
+        8,
+        "Hex part should be 8 chars: {}",
+        hex_part
+    );
     assert!(
         hex_part.chars().all(|c| c.is_ascii_hexdigit()),
         "Should be hex: {}",
@@ -265,9 +275,7 @@ fn test_complexity_estimation() {
     // 8 files -> Large
     let tasks = vec![TaskForGrouping {
         task_id: "t1".to_string(),
-        file_scope: (0..8)
-            .map(|i| PathBuf::from(format!("{}.rs", i)))
-            .collect(),
+        file_scope: (0..8).map(|i| PathBuf::from(format!("{}.rs", i))).collect(),
         profile: "coder".to_string(),
         priority: Priority::Medium,
         depends_on: vec![],

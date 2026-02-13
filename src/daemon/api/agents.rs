@@ -1,7 +1,7 @@
 use super::{ApiError, AppState};
 use crate::graph::{NodeStatus, NodeType};
-use axum::extract::{Path, State};
 use axum::Json;
+use axum::extract::{Path, State};
 use serde::Serialize;
 
 #[derive(Serialize)]

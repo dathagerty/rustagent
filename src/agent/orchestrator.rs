@@ -1,3 +1,4 @@
+use crate::agent::profile::resolve_profile;
 use crate::agent::runtime::{AgentRuntime, RuntimeConfig};
 use crate::agent::work_package::{
     FileOwnershipMap, TaskForGrouping, WorkPackage, WorkerHandle, WorkerState,
@@ -5,7 +6,6 @@ use crate::agent::work_package::{
 };
 use crate::agent::worktree::WorktreeManager;
 use crate::agent::{AgentContext, AgentId, AgentOutcome};
-use crate::agent::profile::resolve_profile;
 use crate::context::resolve_agents_md;
 use crate::graph::store::{GraphStore, NodeQuery};
 use crate::graph::{
@@ -305,7 +305,10 @@ impl Orchestrator {
             if let Some(ref wm) = self.worktree_manager
                 && let Err(e) = wm.create_goal_branch(&goal.id)
             {
-                tracing::warn!("Failed to create goal branch (continuing without worktrees): {}", e);
+                tracing::warn!(
+                    "Failed to create goal branch (continuing without worktrees): {}",
+                    e
+                );
             }
 
             // Check if tasks already exist under this goal
@@ -347,7 +350,10 @@ impl Orchestrator {
         if let Some(ref wm) = self.worktree_manager
             && let Err(e) = wm.create_goal_branch(&goal_id)
         {
-            tracing::warn!("Failed to create goal branch (continuing without worktrees): {}", e);
+            tracing::warn!(
+                "Failed to create goal branch (continuing without worktrees): {}",
+                e
+            );
         }
 
         Ok(OrchestratorState::Planning)
@@ -556,7 +562,8 @@ impl Orchestrator {
             // Check if we should reschedule
             if self.active_workers.is_empty() {
                 // All workers done — go back to scheduling to check for more work
-                self.message_bus.remove_subscriber(&"orchestrator".to_string());
+                self.message_bus
+                    .remove_subscriber(&"orchestrator".to_string());
                 return Ok(OrchestratorState::Scheduling);
             }
         }
@@ -662,19 +669,13 @@ impl Orchestrator {
                 "Tasks: {} completed, {} failed, {} blocked\n",
                 completed, failed, blocked
             ));
-            summary.push_str(&format!(
-                "Total tokens used: {}\n",
-                self.cumulative_tokens
-            ));
+            summary.push_str(&format!("Total tokens used: {}\n", self.cumulative_tokens));
         }
 
         // If multi-agent mode, report the goal branch
         if self.worktree_manager.is_some() {
             let branch = WorktreeManager::goal_branch_name(&goal_id);
-            summary.push_str(&format!(
-                "Changes are on branch: {}\n",
-                branch
-            ));
+            summary.push_str(&format!("Changes are on branch: {}\n", branch));
         }
 
         Ok(OrchestratorResult {
@@ -704,19 +705,11 @@ impl Orchestrator {
         {
             for node in &subtree {
                 if node.node_type == NodeType::Task
-                    && (node.status == NodeStatus::InProgress
-                        || node.status == NodeStatus::Claimed)
+                    && (node.status == NodeStatus::InProgress || node.status == NodeStatus::Claimed)
                 {
                     let _ = self
                         .graph_store
-                        .update_node(
-                            &node.id,
-                            Some(NodeStatus::Ready),
-                            None,
-                            None,
-                            None,
-                            None,
-                        )
+                        .update_node(&node.id, Some(NodeStatus::Ready), None, None, None, None)
                         .await;
                 }
             }
@@ -776,23 +769,22 @@ impl Orchestrator {
 
         // Resolve AGENTS.md summaries (empty file_scope for planner, actual scope for workers)
         let file_scope: Vec<PathBuf> = package.file_scope.clone();
-        let agents_md_summaries = resolve_agents_md(&self.project_path, &file_scope)
-            .unwrap_or_default();
+        let agents_md_summaries =
+            resolve_agents_md(&self.project_path, &file_scope).unwrap_or_default();
 
         // Determine worker's project path (worktree in multi-agent, original in single-agent)
-        let worker_project_path = if let (Some(wm), Some(goal_id)) =
-            (&self.worktree_manager, &self.goal_id)
-        {
-            match wm.create_worktree(goal_id, &package.id) {
-                Ok(path) => path,
-                Err(e) => {
-                    tracing::warn!("Failed to create worktree, falling back to main: {}", e);
-                    self.project_path.clone()
+        let worker_project_path =
+            if let (Some(wm), Some(goal_id)) = (&self.worktree_manager, &self.goal_id) {
+                match wm.create_worktree(goal_id, &package.id) {
+                    Ok(path) => path,
+                    Err(e) => {
+                        tracing::warn!("Failed to create worktree, falling back to main: {}", e);
+                        self.project_path.clone()
+                    }
                 }
-            }
-        } else {
-            self.project_path.clone()
-        };
+            } else {
+                self.project_path.clone()
+            };
 
         // Build AgentContext
         let ctx = AgentContext {
@@ -803,6 +795,8 @@ impl Orchestrator {
             profile: profile.clone(),
             project_path: worker_project_path,
             graph_store: self.graph_store.clone(),
+            previous_attempt: None,
+            dependency_statuses: vec![],
         };
 
         // Build RuntimeConfig from OrchestratorConfig
@@ -950,9 +944,7 @@ impl Orchestrator {
                 }
 
                 // Merge and cleanup worktree on success; preserve on failure
-                if let (Some(wm), Some(goal_id)) =
-                    (&self.worktree_manager, &self.goal_id)
-                {
+                if let (Some(wm), Some(goal_id)) = (&self.worktree_manager, &self.goal_id) {
                     if succeeded {
                         if let Err(e) = wm.merge_work_package(goal_id, &wp_id) {
                             tracing::error!(
@@ -996,14 +988,7 @@ impl Orchestrator {
                 for task_id in task_ids {
                     let _ = self
                         .graph_store
-                        .update_node(
-                            task_id,
-                            Some(NodeStatus::Completed),
-                            None,
-                            None,
-                            None,
-                            None,
-                        )
+                        .update_node(task_id, Some(NodeStatus::Completed), None, None, None, None)
                         .await;
                 }
                 tracing::info!(
@@ -1033,14 +1018,7 @@ impl Orchestrator {
                 for task_id in task_ids {
                     let _ = self
                         .graph_store
-                        .update_node(
-                            task_id,
-                            Some(NodeStatus::Ready),
-                            None,
-                            None,
-                            None,
-                            None,
-                        )
+                        .update_node(task_id, Some(NodeStatus::Ready), None, None, None, None)
                         .await;
                 }
                 tracing::warn!(
@@ -1055,11 +1033,7 @@ impl Orchestrator {
     }
 
     /// Handle retry logic for a failed task.
-    pub async fn handle_task_retry_or_fail(
-        &mut self,
-        task_id: &str,
-        error: &str,
-    ) -> Result<()> {
+    pub async fn handle_task_retry_or_fail(&mut self, task_id: &str, error: &str) -> Result<()> {
         let node = self.graph_store.get_node(task_id).await?;
         let retry_count: usize = node
             .as_ref()
@@ -1069,9 +1043,7 @@ impl Orchestrator {
 
         if retry_count < self.config.max_retries_per_task {
             // Retry: increment count and reset to Ready
-            let mut metadata = node
-                .map(|n| n.metadata.clone())
-                .unwrap_or_default();
+            let mut metadata = node.map(|n| n.metadata.clone()).unwrap_or_default();
             metadata.insert("retry_count".to_string(), (retry_count + 1).to_string());
 
             self.graph_store
@@ -1212,7 +1184,9 @@ impl Orchestrator {
                         .map(|p| PathBuf::from(p.trim()))
                         .collect();
 
-                    let can_expand = files.iter().all(|f| self.file_locks.can_write(&agent_id, f));
+                    let can_expand = files
+                        .iter()
+                        .all(|f| self.file_locks.can_write(&agent_id, f));
                     if can_expand {
                         let _ = self.file_locks.acquire(&agent_id, &files);
                         let _ = self

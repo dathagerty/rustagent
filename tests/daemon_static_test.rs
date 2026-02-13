@@ -12,8 +12,7 @@ async fn create_test_state() -> AppState {
     let db = Database::open(Path::new(":memory:")).await.unwrap();
     let graph_store: Arc<dyn rustagent::graph::store::GraphStore> =
         Arc::new(SqliteGraphStore::new(db.clone()));
-    let message_bus: Arc<dyn rustagent::message::MessageBus> =
-        Arc::new(TokioMessageBus::default());
+    let message_bus: Arc<dyn rustagent::message::MessageBus> = Arc::new(TokioMessageBus::default());
     AppState::new(db, graph_store, message_bus)
 }
 
@@ -23,10 +22,7 @@ async fn test_fallback_without_bundle_ui() {
     let router = rustagent::daemon::server::create_router(state);
 
     // GET / should return fallback message (no bundle-ui feature)
-    let request = Request::builder()
-        .uri("/")
-        .body(Body::empty())
-        .unwrap();
+    let request = Request::builder().uri("/").body(Body::empty()).unwrap();
 
     let response = router.clone().oneshot(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);

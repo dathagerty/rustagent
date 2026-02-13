@@ -432,10 +432,9 @@ async fn main() -> anyhow::Result<()> {
             })?;
 
             // Create shared dependencies
-            let graph_store: std::sync::Arc<dyn GraphStore> =
-                std::sync::Arc::new(rustagent::graph::store::SqliteGraphStore::new(
-                    database.clone(),
-                ));
+            let graph_store: std::sync::Arc<dyn GraphStore> = std::sync::Arc::new(
+                rustagent::graph::store::SqliteGraphStore::new(database.clone()),
+            );
             let llm_client = rustagent::llm::factory::create_client(&config, &config.llm)?;
             let security_validator = std::sync::Arc::new(
                 rustagent::security::SecurityValidator::new(config.security.clone())?,
@@ -507,23 +506,19 @@ async fn main() -> anyhow::Result<()> {
                         let projects = client.projects_list().await?;
                         display_project_list(&projects);
                     }
-                    ProjectAction::Show { name } => {
-                        match client.project_get(&name).await {
-                            Ok(proj) => {
-                                println!("Project: {}", proj.name);
-                                println!("  ID: {}", proj.id);
-                                println!("  Path: {}", proj.path);
-                                println!("  Registered: {}", proj.registered_at);
-                            }
-                            Err(_) => println!("Project '{}' not found", name),
+                    ProjectAction::Show { name } => match client.project_get(&name).await {
+                        Ok(proj) => {
+                            println!("Project: {}", proj.name);
+                            println!("  ID: {}", proj.id);
+                            println!("  Path: {}", proj.path);
+                            println!("  Registered: {}", proj.registered_at);
                         }
-                    }
-                    ProjectAction::Remove { name } => {
-                        match client.project_remove(&name).await {
-                            Ok(()) => println!("Removed project '{}'", name),
-                            Err(_) => println!("Project '{}' not found", name),
-                        }
-                    }
+                        Err(_) => println!("Project '{}' not found", name),
+                    },
+                    ProjectAction::Remove { name } => match client.project_remove(&name).await {
+                        Ok(()) => println!("Removed project '{}'", name),
+                        Err(_) => println!("Project '{}' not found", name),
+                    },
                 }
                 return Ok(());
             }
@@ -638,10 +633,7 @@ async fn main() -> anyhow::Result<()> {
                                 let tasks = client.tasks_list(&goal.id).await?;
                                 println!("Task tree for {}:", goal.id);
                                 for node in &tasks {
-                                    println!(
-                                        "  - {} ({}): {}",
-                                        node.id, node.status, node.title
-                                    );
+                                    println!("  - {} ({}): {}", node.id, node.status, node.title);
                                 }
                             } else {
                                 println!("No goals found for project");
@@ -651,9 +643,7 @@ async fn main() -> anyhow::Result<()> {
                         }
                     }
                     None => {
-                        println!(
-                            "Please specify a task action: list, ready, next, or tree"
-                        );
+                        println!("Please specify a task action: list, ready, next, or tree");
                     }
                 }
                 return Ok(());
@@ -896,15 +886,11 @@ async fn main() -> anyhow::Result<()> {
                         let total = tasks.len();
                         let completed = tasks
                             .iter()
-                            .filter(|t| {
-                                t.status == rustagent::graph::NodeStatus::Completed
-                            })
+                            .filter(|t| t.status == rustagent::graph::NodeStatus::Completed)
                             .count();
                         let in_progress = tasks
                             .iter()
-                            .filter(|t| {
-                                t.status == rustagent::graph::NodeStatus::InProgress
-                            })
+                            .filter(|t| t.status == rustagent::graph::NodeStatus::InProgress)
                             .count();
                         let ready = tasks
                             .iter()
@@ -912,9 +898,7 @@ async fn main() -> anyhow::Result<()> {
                             .count();
                         let blocked = tasks
                             .iter()
-                            .filter(|t| {
-                                t.status == rustagent::graph::NodeStatus::Blocked
-                            })
+                            .filter(|t| t.status == rustagent::graph::NodeStatus::Blocked)
                             .count();
                         let failed = tasks
                             .iter()
@@ -1138,44 +1122,47 @@ async fn main() -> anyhow::Result<()> {
                     }
                     Err(e) => println!("Failed to read file: {}", e),
                 },
-                GraphAction::Diff { path: diff_path } => match std::fs::read_to_string(&diff_path) {
-                    Ok(content) => {
-                        match rustagent::graph::interchange::diff_goal(&graph_store, &content).await
-                        {
-                            Ok(result) => {
-                                println!("Diff results for {}:", diff_path);
-                                if !result.added_nodes.is_empty() {
-                                    println!("  Added nodes: {}", result.added_nodes.len());
-                                    for node_id in &result.added_nodes {
-                                        println!("    + {}", node_id);
+                GraphAction::Diff { path: diff_path } => {
+                    match std::fs::read_to_string(&diff_path) {
+                        Ok(content) => {
+                            match rustagent::graph::interchange::diff_goal(&graph_store, &content)
+                                .await
+                            {
+                                Ok(result) => {
+                                    println!("Diff results for {}:", diff_path);
+                                    if !result.added_nodes.is_empty() {
+                                        println!("  Added nodes: {}", result.added_nodes.len());
+                                        for node_id in &result.added_nodes {
+                                            println!("    + {}", node_id);
+                                        }
                                     }
-                                }
-                                if !result.changed_nodes.is_empty() {
-                                    println!("  Changed nodes: {}", result.changed_nodes.len());
-                                    for (node_id, fields) in &result.changed_nodes {
-                                        println!("    ~ {} ({})", node_id, fields.join(", "));
+                                    if !result.changed_nodes.is_empty() {
+                                        println!("  Changed nodes: {}", result.changed_nodes.len());
+                                        for (node_id, fields) in &result.changed_nodes {
+                                            println!("    ~ {} ({})", node_id, fields.join(", "));
+                                        }
                                     }
-                                }
-                                if !result.removed_nodes.is_empty() {
-                                    println!("  Removed nodes: {}", result.removed_nodes.len());
-                                    for node_id in &result.removed_nodes {
-                                        println!("    - {}", node_id);
+                                    if !result.removed_nodes.is_empty() {
+                                        println!("  Removed nodes: {}", result.removed_nodes.len());
+                                        for node_id in &result.removed_nodes {
+                                            println!("    - {}", node_id);
+                                        }
                                     }
+                                    if !result.added_edges.is_empty() {
+                                        println!("  Added edges: {}", result.added_edges.len());
+                                    }
+                                    if !result.removed_edges.is_empty() {
+                                        println!("  Removed edges: {}", result.removed_edges.len());
+                                    }
+                                    println!("  Unchanged nodes: {}", result.unchanged_nodes);
+                                    println!("  Unchanged edges: {}", result.unchanged_edges);
                                 }
-                                if !result.added_edges.is_empty() {
-                                    println!("  Added edges: {}", result.added_edges.len());
-                                }
-                                if !result.removed_edges.is_empty() {
-                                    println!("  Removed edges: {}", result.removed_edges.len());
-                                }
-                                println!("  Unchanged nodes: {}", result.unchanged_nodes);
-                                println!("  Unchanged edges: {}", result.unchanged_edges);
+                                Err(e) => println!("Diff failed: {}", e),
                             }
-                            Err(e) => println!("Diff failed: {}", e),
                         }
+                        Err(e) => println!("Failed to read file: {}", e),
                     }
-                    Err(e) => println!("Failed to read file: {}", e),
-                },
+                }
             }
         }
         Commands::Daemon { action } => {
@@ -1213,10 +1200,9 @@ async fn main() -> anyhow::Result<()> {
                     let database = db::Database::open(&db_path).await?;
 
                     // Create shared dependencies
-                    let graph_store: std::sync::Arc<dyn GraphStore> =
-                        std::sync::Arc::new(rustagent::graph::store::SqliteGraphStore::new(
-                            database.clone(),
-                        ));
+                    let graph_store: std::sync::Arc<dyn GraphStore> = std::sync::Arc::new(
+                        rustagent::graph::store::SqliteGraphStore::new(database.clone()),
+                    );
                     let message_bus: std::sync::Arc<dyn rustagent::message::MessageBus> =
                         std::sync::Arc::new(rustagent::message::TokioMessageBus::default());
 
@@ -1227,10 +1213,8 @@ async fn main() -> anyhow::Result<()> {
                     );
 
                     // Start the MessageBus-to-WebSocket bridge
-                    let _ws_bridge = rustagent::daemon::ws::start_ws_bridge(
-                        message_bus,
-                        state.ws_tx.clone(),
-                    );
+                    let _ws_bridge =
+                        rustagent::daemon::ws::start_ws_bridge(message_bus, state.ws_tx.clone());
 
                     println!(
                         "Daemon listening on {}:{}",
@@ -1238,37 +1222,31 @@ async fn main() -> anyhow::Result<()> {
                     );
 
                     // Start the HTTP server (blocks until shutdown)
-                    rustagent::daemon::server::start_server(&config, state, shutdown_token)
-                        .await?;
+                    rustagent::daemon::server::start_server(&config, state, shutdown_token).await?;
 
                     // Cleanup
                     rustagent::daemon::remove_pid_file(&cleanup_config)?;
                     println!("Daemon stopped.");
                 }
-                DaemonAction::Stop => {
-                    match rustagent::daemon::read_pid_file(&config)? {
-                        Some(pid) => {
-                            if !rustagent::daemon::is_daemon_running(&config)? {
-                                println!(
-                                    "Stale PID file (process {} not running). Cleaning up.",
-                                    pid
-                                );
-                                rustagent::daemon::remove_pid_file(&config)?;
-                                return Ok(());
-                            }
+                DaemonAction::Stop => match rustagent::daemon::read_pid_file(&config)? {
+                    Some(pid) => {
+                        if !rustagent::daemon::is_daemon_running(&config)? {
+                            println!("Stale PID file (process {} not running). Cleaning up.", pid);
+                            rustagent::daemon::remove_pid_file(&config)?;
+                            return Ok(());
+                        }
 
-                            println!("Stopping daemon (PID {})...", pid);
-                            #[cfg(unix)]
-                            unsafe {
-                                libc::kill(pid as i32, libc::SIGTERM);
-                            }
-                            println!("Signal sent. Daemon should stop shortly.");
+                        println!("Stopping daemon (PID {})...", pid);
+                        #[cfg(unix)]
+                        unsafe {
+                            libc::kill(pid as i32, libc::SIGTERM);
                         }
-                        None => {
-                            println!("No daemon is running (no PID file found).");
-                        }
+                        println!("Signal sent. Daemon should stop shortly.");
                     }
-                }
+                    None => {
+                        println!("No daemon is running (no PID file found).");
+                    }
+                },
                 DaemonAction::Status => {
                     if rustagent::daemon::is_daemon_running(&config)? {
                         let pid = rustagent::daemon::read_pid_file(&config)?.unwrap();
@@ -1291,16 +1269,10 @@ async fn main() -> anyhow::Result<()> {
 
                     let mut entries: Vec<_> = std::fs::read_dir(log_dir)?
                         .filter_map(|e| e.ok())
-                        .filter(|e| {
-                            e.path()
-                                .extension()
-                                .map_or(false, |ext| ext == "log")
-                        })
+                        .filter(|e| e.path().extension().map_or(false, |ext| ext == "log"))
                         .collect();
                     entries.sort_by_key(|e| {
-                        std::cmp::Reverse(
-                            e.metadata().ok().and_then(|m| m.modified().ok()),
-                        )
+                        std::cmp::Reverse(e.metadata().ok().and_then(|m| m.modified().ok()))
                     });
 
                     if entries.is_empty() {

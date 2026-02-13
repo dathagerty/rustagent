@@ -1,7 +1,7 @@
+use crate::daemon::DaemonConfig;
 use crate::daemon::api::AppState;
 use crate::daemon::api::{agents, graph, projects, search};
 use crate::daemon::ws;
-use crate::daemon::DaemonConfig;
 use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use tokio_util::sync::CancellationToken;
@@ -47,10 +47,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/goals/{id}/tasks/ready", get(graph::list_ready_tasks))
         .route("/api/goals/{id}/tasks/next", get(graph::next_task))
         // Decisions
-        .route(
-            "/api/projects/{id}/decisions",
-            get(graph::list_decisions),
-        )
+        .route("/api/projects/{id}/decisions", get(graph::list_decisions))
         .route(
             "/api/projects/{id}/decisions/history",
             get(graph::decisions_history),
@@ -60,10 +57,7 @@ pub fn create_router(state: AppState) -> Router {
             post(graph::export_decisions),
         )
         // Search
-        .route(
-            "/api/projects/{id}/search",
-            post(search::search_nodes),
-        )
+        .route("/api/projects/{id}/search", post(search::search_nodes))
         // Sessions
         .route("/api/goals/{id}/sessions", get(graph::list_sessions))
         .route("/api/sessions/{id}", get(graph::get_session))
@@ -75,14 +69,8 @@ pub fn create_router(state: AppState) -> Router {
             get(graph::export_all_goals),
         )
         .route("/api/goals/{id}/export", get(graph::export_goal_toml))
-        .route(
-            "/api/projects/{id}/graph/import",
-            post(graph::import_graph),
-        )
-        .route(
-            "/api/projects/{id}/graph/diff",
-            post(graph::diff_graph),
-        )
+        .route("/api/projects/{id}/graph/import", post(graph::import_graph))
+        .route("/api/projects/{id}/graph/diff", post(graph::diff_graph))
         // WebSocket
         .route("/ws", get(ws::ws_handler))
         // Static file serving (fallback for non-API routes)

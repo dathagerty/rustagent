@@ -73,6 +73,12 @@ pub struct AgentContext {
 
     /// Graph store for querying and updating nodes
     pub graph_store: Arc<dyn GraphStore>,
+
+    /// Previous attempt outcome description (if this is a retry)
+    pub previous_attempt: Option<String>,
+
+    /// Dependency statuses: (node_id, title, is_completed)
+    pub dependency_statuses: Vec<(String, String, bool)>,
 }
 
 impl std::fmt::Debug for AgentContext {
@@ -84,6 +90,8 @@ impl std::fmt::Debug for AgentContext {
             .field("agents_md_summaries", &self.agents_md_summaries.len())
             .field("profile", &self.profile)
             .field("project_path", &self.project_path)
+            .field("previous_attempt", &self.previous_attempt)
+            .field("dependency_statuses", &self.dependency_statuses.len())
             .finish()
     }
 }

@@ -1,5 +1,5 @@
-use crate::daemon::api::projects::ProjectResponse;
 use crate::daemon::DaemonConfig;
+use crate::daemon::api::projects::ProjectResponse;
 use crate::graph::GraphNode;
 use anyhow::Result;
 use reqwest::Client;

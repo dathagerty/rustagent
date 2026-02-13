@@ -31,8 +31,14 @@ impl std::fmt::Debug for RuntimeConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RuntimeConfig")
             .field("max_turns", &self.max_turns)
-            .field("max_consecutive_llm_failures", &self.max_consecutive_llm_failures)
-            .field("max_consecutive_tool_failures", &self.max_consecutive_tool_failures)
+            .field(
+                "max_consecutive_llm_failures",
+                &self.max_consecutive_llm_failures,
+            )
+            .field(
+                "max_consecutive_tool_failures",
+                &self.max_consecutive_tool_failures,
+            )
             .field("token_budget", &self.token_budget)
             .field("token_budget_warning_pct", &self.token_budget_warning_pct)
             .field("message_bus", &self.message_bus.is_some())

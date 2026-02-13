@@ -13,8 +13,7 @@ async fn create_test_state() -> AppState {
     let db = Database::open(Path::new(":memory:")).await.unwrap();
     let graph_store: Arc<dyn rustagent::graph::store::GraphStore> =
         Arc::new(SqliteGraphStore::new(db.clone()));
-    let message_bus: Arc<dyn rustagent::message::MessageBus> =
-        Arc::new(TokioMessageBus::default());
+    let message_bus: Arc<dyn rustagent::message::MessageBus> = Arc::new(TokioMessageBus::default());
     AppState::new(db, graph_store, message_bus)
 }
 
@@ -128,10 +127,12 @@ async fn test_create_child_node() {
 
     let json = response_json(response).await;
     assert_eq!(json["node_type"], "task");
-    assert!(json["id"]
-        .as_str()
-        .unwrap()
-        .starts_with(&format!("{}.", goal_id)));
+    assert!(
+        json["id"]
+            .as_str()
+            .unwrap()
+            .starts_with(&format!("{}.", goal_id))
+    );
 }
 
 #[tokio::test]

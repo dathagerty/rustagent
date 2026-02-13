@@ -2,13 +2,16 @@ use super::{ApiError, AppState};
 use crate::graph::store::{EdgeDirection, NodeQuery};
 use crate::graph::{self, GraphEdge, GraphNode, NodeStatus, NodeType, Priority};
 use crate::graph::{interchange, session::SessionStore};
+use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::Json;
 use serde::{Deserialize, Serialize};
 
 /// Resolve a project path parameter (name or ID) to the actual project ID
-pub(super) async fn resolve_project_id(state: &AppState, id_or_name: &str) -> Result<String, ApiError> {
+pub(super) async fn resolve_project_id(
+    state: &AppState,
+    id_or_name: &str,
+) -> Result<String, ApiError> {
     if let Some(p) = state.project_store.get_by_name(id_or_name).await? {
         return Ok(p.id);
     }
@@ -280,9 +283,7 @@ pub async fn create_edge(
         .graph_store
         .get_node(&body.from_node)
         .await?
-        .ok_or_else(|| {
-            ApiError::BadRequest(format!("From node '{}' not found", body.from_node))
-        })?;
+        .ok_or_else(|| ApiError::BadRequest(format!("From node '{}' not found", body.from_node)))?;
     state
         .graph_store
         .get_node(&body.to_node)
@@ -372,10 +373,7 @@ pub async fn list_decisions(
     Path(id_or_name): Path<String>,
 ) -> Result<Json<Vec<GraphNode>>, ApiError> {
     let project_id = resolve_project_id(&state, &id_or_name).await?;
-    let decisions = state
-        .graph_store
-        .get_active_decisions(&project_id)
-        .await?;
+    let decisions = state.graph_store.get_active_decisions(&project_id).await?;
     Ok(Json(decisions))
 }
 
@@ -436,12 +434,9 @@ pub async fn export_decisions(
     .ok_or_else(|| ApiError::NotFound(format!("Project '{}' not found", id_or_name)))?;
 
     let output_dir = project.path.join("decisions");
-    let files = crate::graph::export::export_adrs(
-        state.graph_store.as_ref(),
-        &project.id,
-        &output_dir,
-    )
-    .await?;
+    let files =
+        crate::graph::export::export_adrs(state.graph_store.as_ref(), &project.id, &output_dir)
+            .await?;
 
     let paths: Vec<String> = files.iter().map(|p| p.display().to_string()).collect();
     Ok(Json(paths))
@@ -489,12 +484,8 @@ pub async fn export_all_goals(
 
     let mut results = Vec::new();
     for goal in goals {
-        let toml_content = interchange::export_goal(
-            state.graph_store.as_ref(),
-            &goal.id,
-            &project_id,
-        )
-        .await?;
+        let toml_content =
+            interchange::export_goal(state.graph_store.as_ref(), &goal.id, &project_id).await?;
         results.push(ExportResult {
             goal_id: goal.id,
             toml: toml_content,
@@ -536,8 +527,7 @@ pub async fn import_graph(
         _ => interchange::ImportStrategy::Merge,
     };
 
-    let result =
-        interchange::import_goal(state.graph_store.as_ref(), &body.toml, strategy).await?;
+    let result = interchange::import_goal(state.graph_store.as_ref(), &body.toml, strategy).await?;
 
     Ok(Json(result))
 }

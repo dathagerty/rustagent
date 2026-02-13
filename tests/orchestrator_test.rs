@@ -210,7 +210,12 @@ async fn test_task_retry_on_failure() {
     goal.status = rustagent::graph::NodeStatus::Active;
     graph_store.create_node(&goal).await.unwrap();
 
-    let task = common::create_test_task("ra-test.1", "proj-1", "Test task", rustagent::graph::NodeStatus::Ready);
+    let task = common::create_test_task(
+        "ra-test.1",
+        "proj-1",
+        "Test task",
+        rustagent::graph::NodeStatus::Ready,
+    );
     graph_store.create_node(&task).await.unwrap();
 
     let mut config = OrchestratorConfig::default();
@@ -597,7 +602,11 @@ async fn test_run_with_shutdown_cancels() {
     assert_eq!(result.cumulative_tokens, 5000);
 
     // InProgress task should be reset to Ready
-    let task = graph_store.get_node("ra-shutdown.1").await.unwrap().unwrap();
+    let task = graph_store
+        .get_node("ra-shutdown.1")
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(task.status, rustagent::graph::NodeStatus::Ready);
 }
 
