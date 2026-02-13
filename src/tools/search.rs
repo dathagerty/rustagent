@@ -330,11 +330,7 @@ mod tests {
 
         // Create files in target (should be skipped)
         std::fs::create_dir_all(project_root.join("target")).unwrap();
-        std::fs::write(
-            project_root.join("target/artifact.rs"),
-            "fn should_skip",
-        )
-        .unwrap();
+        std::fs::write(project_root.join("target/artifact.rs"), "fn should_skip").unwrap();
 
         let tool = CodeSearchTool::new(project_root);
         let params = json!({

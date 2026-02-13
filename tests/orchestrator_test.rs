@@ -808,7 +808,29 @@ async fn test_retry_cascade_unblock_lifecycle() {
         Some(&"ra-p5-test.1".to_string())
     );
 
-    // === Step 3: Manually complete Task A (simulate external fix) ===
+    // === Step 3: Verify AC13.2 - Blocked task stays Blocked when blocker is still Failed ===
+    // We need to test that unblocking doesn't happen when the blocker is still Failed.
+    // We can't easily call handle_scheduling here because it would also claim the ready
+    // task A. Instead, we verify by looking at the state: task B is Blocked and task A is
+    // Failed, so they should remain in that state. Then we complete A and test unblocking.
+
+    // Verify Task A is still Failed
+    let task_a_still_failed = graph_store.get_node("ra-p5-test.1").await.unwrap().unwrap();
+    assert_eq!(
+        task_a_still_failed.status,
+        rustagent::graph::NodeStatus::Failed,
+        "Task A should still be Failed before external completion"
+    );
+
+    // Verify Task B is still Blocked (because its blocker task A is still Failed)
+    let task_b_still_blocked = graph_store.get_node("ra-p5-test.2").await.unwrap().unwrap();
+    assert_eq!(
+        task_b_still_blocked.status,
+        rustagent::graph::NodeStatus::Blocked,
+        "Task B should still be Blocked while its blocker task A is Failed (AC13.2)"
+    );
+
+    // === Step 4: Manually complete Task A (simulate external fix) ===
     graph_store
         .update_node(
             "ra-p5-test.1",
@@ -828,42 +850,19 @@ async fn test_retry_cascade_unblock_lifecycle() {
         rustagent::graph::NodeStatus::Completed
     );
 
-    // Verify Task B is still Blocked before unblocking
-    let task_b_before_unblock = graph_store.get_node("ra-p5-test.2").await.unwrap().unwrap();
-    assert_eq!(
-        task_b_before_unblock.status,
-        rustagent::graph::NodeStatus::Blocked
-    );
+    // === Step 5: Call handle_scheduling which exercises try_unblock_tasks (AC13.1) ===
+    // This calls the actual production code path that unblocks tasks.
+    // After unblocking from Blocked to Ready, handle_scheduling will claim the task,
+    // transitioning it to Claimed. We verify unblocking happened by checking that the
+    // blocker_task_id was removed and blocked_reason was cleared.
+    let _ = orchestrator.handle_scheduling().await;
 
-    // === Step 4: Manually trigger the unblock logic (simulating what try_unblock_tasks does) ===
-    let blocked_task = graph_store.get_node("ra-p5-test.2").await.unwrap().unwrap();
-
-    // Check if blocker (from metadata) is completed
-    if let Some(blocker_id) = blocked_task.metadata.get("blocker_task_id") {
-        if let Some(blocker) = graph_store.get_node(blocker_id).await.unwrap() {
-            if blocker.status == rustagent::graph::NodeStatus::Completed {
-                // Unblock Task B
-                let mut metadata = blocked_task.metadata.clone();
-                metadata.remove("blocker_task_id");
-
-                graph_store
-                    .update_node(
-                        "ra-p5-test.2",
-                        Some(rustagent::graph::NodeStatus::Ready),
-                        None,
-                        None,
-                        Some(""), // clear blocked_reason by setting to empty string
-                        Some(&metadata),
-                    )
-                    .await
-                    .unwrap();
-            }
-        }
-    }
-
-    // Verify Task B is now Ready (unblocked)
+    // Verify Task B is no longer Blocked (it's either Ready or Claimed after scheduling)
     let task_b_unblocked = graph_store.get_node("ra-p5-test.2").await.unwrap().unwrap();
-    assert_eq!(task_b_unblocked.status, rustagent::graph::NodeStatus::Ready);
+    assert!(
+        task_b_unblocked.status != rustagent::graph::NodeStatus::Blocked,
+        "Task B should not be Blocked after blocker task A completed (AC13.1)"
+    );
     // blocked_reason should be empty string (cleared) or None
     assert!(
         task_b_unblocked
@@ -876,6 +875,6 @@ async fn test_retry_cascade_unblock_lifecycle() {
     );
     assert!(
         !task_b_unblocked.metadata.contains_key("blocker_task_id"),
-        "blocker_task_id should be removed"
+        "blocker_task_id should be removed after unblocking"
     );
 }
