@@ -1,5 +1,5 @@
 use crate::agent::{AgentContext, AgentId, AgentOutcome, AgentProfile};
-use crate::context::ContextBuilder;
+use crate::context::{ContextBuilder, ContextBudget};
 use crate::llm::{LlmClient, Message, ResponseContent};
 use crate::message::{MessageBus, WorkerMessage};
 use crate::tools::ToolRegistry;
@@ -90,7 +90,8 @@ impl AgentRuntime {
 
     /// Run the agentic loop
     pub async fn run(&self, ctx: AgentContext) -> Result<AgentOutcome> {
-        let system_prompt = ContextBuilder::build_system_prompt(&ctx);
+        let budget = ContextBudget::default();
+        let system_prompt = ContextBuilder::build_system_prompt_with_budget(&ctx, &budget);
         let mut messages = vec![Message::system(system_prompt)];
         let mut cumulative_tokens: usize = 0;
         let mut warned_about_budget = false;
