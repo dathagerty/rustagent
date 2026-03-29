@@ -4,6 +4,9 @@ use regex::Regex;
 use std::path::{Component, Path, PathBuf};
 
 pub mod permission;
+pub mod scope;
+
+pub use scope::{FileOperation, ScopeCheck, SecurityScope};
 
 pub struct SecurityValidator {
     config: SecurityConfig,

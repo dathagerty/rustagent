@@ -1,9 +1,20 @@
+use crate::agent::AgentId;
+use crate::context::ReadAgentsMdTool;
+use crate::graph::store::GraphStore;
+use crate::message::MessageBus;
 use crate::security::SecurityValidator;
 use crate::security::permission::PermissionHandler;
 use crate::tools::ToolRegistry;
+use crate::tools::agent_tools::{QueryAgentStatusTool, SendMessageTool, SpawnSubAgentTool};
 use crate::tools::file::{ListFilesTool, ReadFileTool, WriteFileTool};
+use crate::tools::graph_tools::{
+    AddEdgeTool, ChooseOptionTool, ClaimTaskTool, CreateNodeTool, LogDecisionTool, QueryNodesTool,
+    RecordObservationTool, RecordOutcomeTool, RevisitTool, SearchNodesTool, UpdateNodeTool,
+};
+use crate::tools::search::CodeSearchTool;
 use crate::tools::shell::RunCommandTool;
 use crate::tools::signal::SignalTool;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 pub fn create_default_registry(
@@ -29,6 +40,53 @@ pub fn create_default_registry(
         permission_handler.clone(),
     )));
     registry.register(Arc::new(SignalTool::new()));
+
+    registry
+}
+
+/// Create a v2 registry for agent runtime with graph tools registered.
+///
+/// Pass `message_bus` and `agent_id` for multi-agent mode (enables agent tools).
+/// Pass `None, None` for single-agent mode (agent tools are omitted).
+pub fn create_v2_registry(
+    validator: Arc<SecurityValidator>,
+    permission_handler: Arc<dyn PermissionHandler>,
+    graph_store: Arc<dyn GraphStore>,
+    message_bus: Option<Arc<dyn MessageBus>>,
+    agent_id: Option<AgentId>,
+    project_root: PathBuf,
+) -> ToolRegistry {
+    let registry = create_default_registry(validator, permission_handler);
+
+    // Register graph tools
+    registry.register(Arc::new(CreateNodeTool::new(graph_store.clone())));
+    registry.register(Arc::new(UpdateNodeTool::new(graph_store.clone())));
+    registry.register(Arc::new(AddEdgeTool::new(graph_store.clone())));
+    registry.register(Arc::new(QueryNodesTool::new(graph_store.clone())));
+    registry.register(Arc::new(SearchNodesTool::new(graph_store.clone())));
+    registry.register(Arc::new(ClaimTaskTool::new(graph_store.clone())));
+    registry.register(Arc::new(LogDecisionTool::new(graph_store.clone())));
+    registry.register(Arc::new(ChooseOptionTool::new(graph_store.clone())));
+    registry.register(Arc::new(RecordOutcomeTool::new(graph_store.clone())));
+    registry.register(Arc::new(RecordObservationTool::new(graph_store.clone())));
+    registry.register(Arc::new(RevisitTool::new(graph_store.clone())));
+
+    // Register context tools
+    registry.register(Arc::new(ReadAgentsMdTool::new()));
+
+    // Register search tools
+    registry.register(Arc::new(CodeSearchTool::new(project_root)));
+
+    // Register agent tools (only in multi-agent mode)
+    if let (Some(bus), Some(id)) = (message_bus, agent_id) {
+        registry.register(Arc::new(SpawnSubAgentTool::new(
+            graph_store.clone(),
+            bus.clone(),
+            id.clone(),
+        )));
+        registry.register(Arc::new(SendMessageTool::new(bus.clone())));
+        registry.register(Arc::new(QueryAgentStatusTool::new(graph_store)));
+    }
 
     registry
 }

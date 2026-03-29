@@ -51,6 +51,16 @@ struct OpenAiFunction {
 #[derive(Debug, Deserialize)]
 struct OpenAiResponse {
     choices: Vec<OpenAiChoice>,
+    #[serde(default)]
+    usage: OpenAiUsage,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct OpenAiUsage {
+    #[serde(default)]
+    prompt_tokens: usize,
+    #[serde(default)]
+    completion_tokens: usize,
 }
 
 #[derive(Debug, Deserialize)]
@@ -191,6 +201,8 @@ impl OpenAiClient {
         Ok(Response {
             content,
             stop_reason: choice.finish_reason.clone(),
+            input_tokens: Some(openai_response.usage.prompt_tokens),
+            output_tokens: Some(openai_response.usage.completion_tokens),
         })
     }
 }
